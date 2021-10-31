@@ -48,6 +48,28 @@ func cookieJarFromReader(reader io.Reader, url *url.URL) (http.CookieJar, error)
 	return jar, nil
 }
 
+func unmarshalFromResponse(resp *http.Response, v interface{}) error {
+	if resp.StatusCode != 200 {
+		body, err := io.ReadAll(resp.Body)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		resp.Body.Close()
+
+		return fmt.Errorf("invalid status code received from leetcode: %s\n%s", resp.Status, body)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return json.Unmarshal(body, v)
+}
+
 type leetcode struct {
 	raw  http.Client
 	base *url.URL
@@ -127,8 +149,8 @@ func (client *leetcode) DoQuery(operationName string, query string, variables in
 	return err
 }
 
-func (client *leetcode) Submit(questionId string, slug string, lang string, code io.Reader) (*SubmitResponse, error) {
-	submissionSrc, err := submissionFromReader(code)
+func (client *leetcode) Submit(questionId string, slug string, lang LangSlug, code io.Reader) (*SubmitResponse, error) {
+	submissionSrc, err := submissionFromReader(code, lang)
 	if err != nil {
 		return nil, err
 	}

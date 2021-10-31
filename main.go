@@ -165,15 +165,10 @@ func main() {
 		if *srcStr != "" {
 			spl := strings.Split(*srcStr, ".")
 			if len(spl) > 1 {
-				ext := spl[len(spl) - 1]
-				switch ext {
-				case "cpp":
-					*langStr = "cpp"
-				case "rs":
-					*langStr = "rust"
-				default:
-					log.Fatalf("unrecognized file extension: %s, a lang must be provided", ext)
-				}
+				ext := spl[len(spl)-1]
+				langSlug, err := NewLangFromExt(ext)
+				*langStr = string(langSlug)
+				check(err)
 			}
 		}
 
@@ -182,11 +177,13 @@ func main() {
 		}
 	}
 
-	if ! *doSubmit {
+	langSlug := LangSlug(*langStr)
+
+	if !*doSubmit {
 		questionData, err := client.GetQuestionData(*slugStr)
 		check(err)
 
-		questionStr, err := questionData.String(*langStr)
+		questionStr, err := questionData.String(langSlug)
 		check(err)
 
 		var output io.Writer
@@ -208,7 +205,7 @@ func main() {
 			check(err)
 		}
 
-		submitResp, err := client.Submit(*questionIdStr, *slugStr, *langStr, srcFile)
+		submitResp, err := client.Submit(*questionIdStr, *slugStr, langSlug, srcFile)
 		check(err)
 
 		submissionId := submitResp.SubmissionId
