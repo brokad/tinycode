@@ -1,4 +1,4 @@
-module leetcode
+module tinycode
 
 go 1.17
 

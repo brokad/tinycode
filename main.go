@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"os/user"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -103,13 +105,19 @@ func main() {
 	log.SetOutput(os.Stderr)
 	log.SetFlags(log.Lshortfile)
 
+	usr, err := user.Current()
+	check(err)
+
+	home := usr.HomeDir
+	cookieJarDefault := path.Join(home, ".config/leetcode/cookie-jar")
+
 	baseStr := flag.String("base", "https://leetcode.com", "the leetcode base URL")
-	slugStr := flag.String("slug", "", "the slug of the problem")
-	srcStr := flag.String("src", "", "the path to the source file")
-	questionIdStr := flag.String("question-id", "", "the question id of the problem")
-	cookieJarStr := flag.String("cookie-jar", "./cookie-jar", "the path to the cookie jar file")
-	langStr := flag.String("lang", "", "the language of the submission")
-	doSubmit := flag.Bool("submit", false, "whether to submit a solution")
+	slugStr := flag.String("problem-slug", "", "the slug of the problem (e.g. two-sum)")
+	srcStr := flag.String("src", "", "the path to a source file (if not specified, uses stdin/stdout)")
+	questionIdStr := flag.String("question-id", "", "the question id of the problem (e.g. 1)")
+	cookieJarStr := flag.String("cookie-jar", cookieJarDefault, "the path to the cookie jar file (see README)")
+	langStr := flag.String("lang", "", "the language of the submission (e.g. rust)")
+	doSubmit := flag.Bool("submit", false, "whether to submit a solution (if not specified, will pull problem statement)")
 
 	flag.Parse()
 
@@ -137,7 +145,7 @@ func main() {
 		}
 
 		if *slugStr == "" {
-			log.Fatal("a problem slug must be provided")
+			log.Fatal("a problem-slug must be provided")
 		}
 	}
 

@@ -254,7 +254,9 @@ func (data *QuestionData) String(langSlug LangSlug) (*string, error) {
 
 	var buf strings.Builder
 
-	buf.WriteString(prefix)
+	if suffix != "" {
+		buf.WriteString(prefix)
+	}
 
 	// Add the header (metadata + formatted question statement)
 	for _, line := range strings.Split(header, "\n") {
@@ -265,7 +267,7 @@ func (data *QuestionData) String(langSlug LangSlug) (*string, error) {
 
 	if langSlug == Rust {
 		// Switch to content comments from now on
-		single = "//"
+		single = "// "
 	}
 
 	// Add the solution prompt, braced by submission area brackets
