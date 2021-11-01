@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/fatih/color"
@@ -9,6 +10,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/user"
 	"path"
 	"regexp"
@@ -118,8 +120,13 @@ func main() {
 	cookieJarStr := flag.String("cookie-jar", cookieJarDefault, "the path to the cookie jar file (see README)")
 	langStr := flag.String("lang", "", "the language of the submission (e.g. rust)")
 	doSubmit := flag.Bool("submit", false, "whether to submit a solution (if not specified, will pull problem statement)")
+	doOpen := flag.Bool("open", false, "whether to open the problem file")
 
 	flag.Parse()
+
+	if *doOpen && *srcStr == "" {
+		log.Fatal("-src must be set when using -open")
+	}
 
 	pwd, _ := os.Getwd()
 	log.Printf("working directory: %s", pwd)
@@ -198,11 +205,25 @@ func main() {
 		if *srcStr == "" {
 			output = os.Stdout
 		} else {
-			output, err = os.Create(*srcStr)
-			check(err)
+			if _, err := os.Stat(*srcStr); errors.Is(err, os.ErrNotExist) {
+				output, err = os.Create(*srcStr)
+				check(err)
+			} else {
+				log.Fatalf("file %s already exists", *srcStr)
+			}
 		}
 
 		fmt.Fprintf(output, "%s", *questionStr)
+
+		if *doOpen  && *srcStr != "" {
+			editor := os.Getenv("EDITOR")
+			if editor == "" {
+				log.Fatal("no $EDITOR set, try `export EDITOR=emacs`")
+			}
+			editorCmd := exec.Command(editor, *srcStr)
+			check(editorCmd.Start())
+			check(editorCmd.Wait())
+		}
 	} else {
 		var srcFile io.Reader
 
