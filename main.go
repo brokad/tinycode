@@ -151,7 +151,7 @@ func main() {
 	configPathDefault := path.Join(home, ".config/tinycode")
 
 	backendStr := flag.String("backend", "leetcode", "which problem set provider to use (only leetcode allowed)")
-	slugStr := flag.String("problem-slug", "", "the slug of the problem (e.g. two-sum)")
+	slugStr := flag.String("problem-slug", "", "the slug of the problem (e.g. two-sum), if not specified will pick a random problem")
 	srcStr := flag.String("src", "", "the path to a source file (if not specified, uses stdin/stdout)")
 	questionIdStr := flag.String("question-id", "", "the question id of the problem (e.g. 1)")
 	configStr := flag.String("config", configPathDefault, "the path to the configuration directory")
@@ -159,7 +159,47 @@ func main() {
 	doSubmit := flag.Bool("submit", false, "whether to submit a solution (if not specified, will pull problem statement)")
 	doOpen := flag.Bool("open", false, "whether to open the problem file")
 
+	doEasy := flag.Bool("easy", false, "")
+	doMedium := flag.Bool("medium", false, "")
+	doHard := flag.Bool("hard", false, "")
+
+	doTodo := flag.Bool("todo", false, "")
+	doAttempted := flag.Bool("attempted", false, "")
+	doSolved := flag.Bool("solved", false, "")
+
+	tagsStr := flag.String("tags", "", "")
+
 	flag.Parse()
+
+	var difficulty DifficultyFilter
+	if *doEasy || *doMedium || *doHard {
+		if *doEasy {
+			difficulty = Easy
+		} else if *doMedium {
+			difficulty = Medium
+		} else if *doHard {
+			difficulty = Hard
+		}
+	}
+
+	var status StatusFilter
+	if *doTodo || *doAttempted || *doSolved {
+		if *doTodo {
+			status = Todo
+		} else if *doAttempted {
+			status = Attempted
+		} else if *doSolved {
+			status = Solved
+		}
+	}
+
+	var tags []string
+	if *tagsStr != "" {
+		for _, tag := range strings.Split(*tagsStr, ",") {
+			tag = strings.TrimSpace(tag)
+			tags = append(tags, tag)
+		}
+	}
 
 	baseStr := new(string)
 	switch *backendStr {
@@ -179,6 +219,17 @@ func main() {
 	base, err := url.Parse(*baseStr)
 	check(err)
 
+	cookieJarStr := new(string)
+	*cookieJarStr = path.Join(*configStr, fmt.Sprintf("%s.cookies", *backendStr))
+	cookieFile, err := os.Open(*cookieJarStr)
+	if errors.Is(err, os.ErrNotExist) {
+		printCookieReadmeAndExit(*backendStr, *cookieJarStr)
+	}
+	check(err)
+
+	client, err := NewClient(cookieFile, base)
+	check(err)
+
 	if *slugStr == "" {
 		if *srcStr != "" && *doSubmit {
 			srcFile, err := os.Open(*srcStr)
@@ -196,21 +247,22 @@ func main() {
 			}
 		}
 
+		if !*doSubmit {
+			log.Printf("no problem-slug provided, picking one at random")
+
+			filters := Filters{
+				difficulty,
+				status,
+				tags,
+			}
+			*slugStr, err = client.GetRandomQuestion(filters, "")
+			check(err)
+		}
+
 		if *slugStr == "" {
 			log.Fatal("a problem-slug must be provided")
 		}
 	}
-
-	cookieJarStr := new(string)
-	*cookieJarStr = path.Join(*configStr, fmt.Sprintf("%s.cookies", *backendStr))
-	cookieFile, err := os.Open(*cookieJarStr)
-	if errors.Is(err, os.ErrNotExist) {
-		printCookieReadmeAndExit(*backendStr, *cookieJarStr)
-	}
-	check(err)
-
-	client, err := NewClient(cookieFile, base)
-	check(err)
 
 	if isSignedIn, err := client.IsSignedIn(); err != nil || !isSignedIn {
 		if err != nil {
@@ -222,20 +274,6 @@ func main() {
 		printCookieReadmeAndExit(*backendStr, *cookieJarStr)
 	} else {
 		log.Printf("valid authentication token found")
-	}
-
-	if *questionIdStr == "" && *doSubmit {
-		log.Printf("a question-id was not provided: attempting to query the api")
-		questionData, err := client.GetQuestionData(*slugStr)
-		check(err)
-
-		*questionIdStr = questionData.QuestionId
-
-		if *questionIdStr == "" {
-			log.Fatal("a question-id must be provided")
-		} else {
-			log.Printf("found question-id=%s", *questionIdStr)
-		}
 	}
 
 	if *langStr == "" {
@@ -286,7 +324,21 @@ func main() {
 			check(editorCmd.Start())
 			check(editorCmd.Wait())
 		}
-	} else {
+	} else { // doSubmit
+		if *questionIdStr == "" {
+			log.Printf("a question-id was not provided: attempting to query the api")
+			questionData, err := client.GetQuestionData(*slugStr)
+			check(err)
+
+			*questionIdStr = questionData.QuestionId
+
+			if *questionIdStr == "" {
+				log.Fatal("a question-id must be provided")
+			} else {
+				log.Printf("found question-id=%s", *questionIdStr)
+			}
+		}
+
 		var srcFile io.Reader
 
 		if *srcStr == "" {

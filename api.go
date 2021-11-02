@@ -212,6 +212,28 @@ type QuestionData struct {
 	CodeSnippets []CodeSnippet `json:"codeSnippets"`
 }
 
+type DifficultyFilter string
+
+const (
+	Easy   DifficultyFilter = "EASY"
+	Medium                  = "MEDIUM"
+	Hard                    = "HARD"
+)
+
+type StatusFilter string
+
+const (
+	Todo      StatusFilter = "NOT_SOLVED"
+	Solved                 = "AC"
+	Attempted              = "TRIED"
+)
+
+type Filters struct {
+	Difficulty DifficultyFilter `json:"difficulty,omitempty"`
+	Status     StatusFilter     `json:"status,omitempty"`
+	Tags       []string         `json:"tags,omitempty"`
+}
+
 func stripHtml(s string) string {
 	re := regexp.MustCompile("<\\/?[^>]*>")
 	output := re.ReplaceAllString(s, "")

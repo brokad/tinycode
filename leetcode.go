@@ -168,12 +168,55 @@ query globalData {
 		Data QueryData `json:"data"`
 	}
 
-	output := QueryResult {}
+	output := QueryResult{}
 
 	if err := client.DoQuery("globalData", query, nil, &output); err != nil {
 		return false, err
 	} else {
 		return output.Data.UserStatus.IsSignedIn, nil
+	}
+}
+
+func (client *leetcode) GetRandomQuestion(filters Filters, categorySlug string) (string, error) {
+	query := `
+query randomQuestion($categorySlug: String, $filters: QuestionListFilterInput) {
+  randomQuestion(categorySlug: $categorySlug, filters: $filters) {
+    titleSlug
+  }
+}`
+
+	type Variables struct {
+		CategorySlug string  `json:"categorySlug"`
+		Filters      Filters `json:"filters"`
+	}
+
+	variables := Variables{
+		categorySlug,
+		filters,
+	}
+
+	type RandomQuestionData struct {
+		TitleSlug string `json:"titleSlug"`
+	}
+
+	type QueryData struct {
+		RandomQuestion RandomQuestionData `json:"randomQuestion"`
+	}
+
+	type QueryResult struct {
+		Data QueryData `json:"data"`
+	}
+
+	output := QueryResult{}
+	if err := client.DoQuery("randomQuestion", query, variables, &output); err != nil {
+		return "", err
+	} else {
+		titleSlug := output.Data.RandomQuestion.TitleSlug
+		if titleSlug == "" {
+			return "", fmt.Errorf("could not find a viable question, try removing conditions")
+		} else {
+			return titleSlug, nil
+		}
 	}
 }
 
@@ -272,7 +315,7 @@ query questionData($titleSlug: String!) {
 		Data ResponseResult `json:"data"`
 	}
 
-	res := QueryResult {}
+	res := QueryResult{}
 
 	err := client.DoQuery("questionData", query, variables, &res)
 	if err != nil {
