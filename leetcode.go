@@ -255,8 +255,9 @@ func (client *leetcode) WaitUntilCompleteOrTimeOut(submissionId int64, timeOut t
 
 	checkUrl := client.base.ResolveReference(checkPath).String()
 
+	backoff := 25 * time.Millisecond
+
 	start := time.Now()
-	end := start
 	for {
 		checkResp := CheckResponse{}
 		err := client.Do("GET", checkUrl, nil, &checkResp)
@@ -269,13 +270,15 @@ func (client *leetcode) WaitUntilCompleteOrTimeOut(submissionId int64, timeOut t
 		}
 
 		// Wait a bit before trying again
-		time.Sleep(10 * time.Millisecond)
-
-		end = time.Now()
-		if end.Sub(start) > timeOut {
-			return nil, fmt.Errorf("request timed out after %s", timeOut)
+		backoff *= 2
+		if time.Now().Add(backoff).Before(start.Add(timeOut)) {
+			time.Sleep(backoff)
+		} else {
+			break
 		}
 	}
+
+	return nil, fmt.Errorf("request timed out after %s", timeOut)
 }
 
 func (client *leetcode) GetQuestionData(titleSlug string) (*QuestionData, error) {
