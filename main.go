@@ -116,7 +116,7 @@ func printCookieReadmeAndExit(provider string, path string) {
   (4) Look for an API call to 'graphql', refreshing the page if necessary
   
   (5) In the request header section of the inspector window, look for 'Cookie: '
-      and copy/paste the content to the file:
+      header and copy/paste the _value_ to the file:
 
          %s
 
