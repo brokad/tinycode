@@ -182,6 +182,10 @@ func main() {
 		}
 	}
 
+	if difficulty != "" && *doSubmit {
+		log.Printf("-easy/-medium/-hard ignored in -submit mode")
+	}
+
 	var status StatusFilter
 	if *doTodo || *doAttempted || *doSolved {
 		if *doTodo {
@@ -193,12 +197,20 @@ func main() {
 		}
 	}
 
+	if status != "" && *doSubmit {
+		log.Printf("-todo/-attempted/-solved ignored in -submit mode")
+	}
+
 	var tags []string
 	if *tagsStr != "" {
 		for _, tag := range strings.Split(*tagsStr, ",") {
 			tag = strings.TrimSpace(tag)
 			tags = append(tags, tag)
 		}
+	}
+
+	if len(tags) != 0 && *doSubmit {
+		log.Printf("-tags ignored in -submit mode")
 	}
 
 	baseStr := new(string)
@@ -269,6 +281,8 @@ func main() {
 			}
 			*slugStr, err = client.GetRandomQuestion(filters, "")
 			check(err)
+
+			log.Printf("chose problem: %s", *slugStr)
 		}
 
 		if *slugStr == "" {
@@ -307,14 +321,18 @@ func main() {
 		} else {
 			stat, err := os.Stat(*srcStr)
 
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				check(err)
-			} else if err == nil && stat.Mode().IsDir() {
+			if err == nil && stat.Mode().IsDir() {
 				ext, err := langSlug.Ext()
 				check(err)
 				*srcStr = path.Join(*srcStr, fmt.Sprintf("%s.%s", *slugStr, ext))
-			} else if err == nil && stat.Mode().IsRegular() {
-				log.Fatalf("file already exists: %s, aborting", *srcStr)
+				stat, err = os.Stat(*srcStr)
+			}
+
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				check(err)
+			} else if err == nil {
+				log.Printf("file already exists: %s, not writing anything", *srcStr)
+				*srcStr = os.DevNull
 			}
 
 			output, err = os.Create(*srcStr)
