@@ -102,27 +102,72 @@ func printCheckResponseAndExit(res *CheckResponse, submissionId int64) {
 	}
 }
 
+func printCookieReadmeAndExit(provider string, path string) {
+	var instructions string
+	switch provider {
+	case "leetcode":
+		instructions = fmt.Sprintf(`
+  (1) Head over to https://leetcode.com/accounts/login/ and login to leetcode
+
+  (2) Open the development console (e.g. F12 for Firefox)
+
+  (3) Open the network inspection tab (e.g. Network for Firefox)
+
+  (4) Look for an API call to 'graphql', refreshing the page if necessary
+  
+  (5) In the request header section of the inspector window, look for 'Cookie: '
+      and copy/paste the content to the file:
+
+         %s
+
+Be careful to include the whole cookie as some browsers (e.g. Firefox) truncate
+their output in the inspector window. Follow your browser's documentation (e.g. 
+for Firefox click on the 'Raw' toggle).`, path)
+	default:
+		log.Panicf("unknown provider: %s", provider)
+	}
+	fmt.Fprintf(os.Stderr, `
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Could not find a valid authentication token for %[1]s.
+
+tinycode needs a current API token in order to query %[1]s's API. Please follow 
+these instructions to obtain one:
+%[2]s
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+`, provider, instructions)
+	log.Fatalf("could not authenticate to %s", provider)
+}
+
 func main() {
-	log.SetPrefix("leetcode: ")
+	log.SetPrefix("tinycode: ")
 	log.SetOutput(os.Stderr)
-	log.SetFlags(log.Lshortfile)
+	log.SetFlags(0)
 
 	usr, err := user.Current()
 	check(err)
 
 	home := usr.HomeDir
-	cookieJarDefault := path.Join(home, ".config/leetcode/cookie-jar")
+	configPathDefault := path.Join(home, ".config/tinycode")
 
-	baseStr := flag.String("base", "https://leetcode.com", "the leetcode base URL")
+	backendStr := flag.String("backend", "leetcode", "which problem set provider to use (only leetcode allowed)")
 	slugStr := flag.String("problem-slug", "", "the slug of the problem (e.g. two-sum)")
 	srcStr := flag.String("src", "", "the path to a source file (if not specified, uses stdin/stdout)")
 	questionIdStr := flag.String("question-id", "", "the question id of the problem (e.g. 1)")
-	cookieJarStr := flag.String("cookie-jar", cookieJarDefault, "the path to the cookie jar file (see README)")
+	configStr := flag.String("config", configPathDefault, "the path to the configuration directory")
 	langStr := flag.String("lang", "", "the language of the submission (e.g. rust)")
 	doSubmit := flag.Bool("submit", false, "whether to submit a solution (if not specified, will pull problem statement)")
 	doOpen := flag.Bool("open", false, "whether to open the problem file")
 
 	flag.Parse()
+
+	baseStr := new(string)
+	switch *backendStr {
+	case "leetcode":
+		*baseStr = "https://leetcode.com"
+	default:
+		log.Fatalf("unknown provider: %s", *backendStr)
+	}
 
 	if *doOpen && *srcStr == "" {
 		log.Fatal("-src must be set when using -open")
@@ -156,11 +201,28 @@ func main() {
 		}
 	}
 
+	cookieJarStr := new(string)
+	*cookieJarStr = path.Join(*configStr, fmt.Sprintf("%s.cookies", *backendStr))
 	cookieFile, err := os.Open(*cookieJarStr)
+	if errors.Is(err, os.ErrNotExist) {
+		printCookieReadmeAndExit(*backendStr, *cookieJarStr)
+	}
 	check(err)
 
 	client, err := NewClient(cookieFile, base)
 	check(err)
+
+	if isSignedIn, err := client.IsSignedIn(); err != nil || !isSignedIn {
+		if err != nil {
+			log.Printf("error trying to check if user is signed in: %s", err)
+		}
+		if !isSignedIn {
+			log.Printf("user is not signed in")
+		}
+		printCookieReadmeAndExit(*backendStr, *cookieJarStr)
+	} else {
+		log.Printf("valid authentication token found")
+	}
 
 	if *questionIdStr == "" && *doSubmit {
 		log.Printf("a question-id was not provided: attempting to query the api")
@@ -215,7 +277,7 @@ func main() {
 
 		fmt.Fprintf(output, "%s", *questionStr)
 
-		if *doOpen  && *srcStr != "" {
+		if *doOpen && *srcStr != "" {
 			editor := os.Getenv("EDITOR")
 			if editor == "" {
 				log.Fatal("no $EDITOR set, try `export EDITOR=emacs`")

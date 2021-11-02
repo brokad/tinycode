@@ -149,6 +149,34 @@ func (client *leetcode) DoQuery(operationName string, query string, variables in
 	return err
 }
 
+func (client *leetcode) IsSignedIn() (bool, error) {
+	query := `
+query globalData {
+  userStatus {
+    isSignedIn
+  }
+}`
+	type UserStatus struct {
+		IsSignedIn bool `json:"isSignedIn"`
+	}
+
+	type QueryData struct {
+		UserStatus UserStatus `json:"userStatus"`
+	}
+
+	type QueryResult struct {
+		Data QueryData `json:"data"`
+	}
+
+	output := QueryResult {}
+
+	if err := client.DoQuery("globalData", query, nil, &output); err != nil {
+		return false, err
+	} else {
+		return output.Data.UserStatus.IsSignedIn, nil
+	}
+}
+
 func (client *leetcode) Submit(questionId string, slug string, lang LangSlug, code io.Reader) (*SubmitResponse, error) {
 	submissionSrc, err := submissionFromReader(code, lang)
 	if err != nil {
