@@ -164,6 +164,21 @@ func NewLangFromExt(ext string) (LangSlug, error) {
 	}
 }
 
+func (slug *LangSlug) Ext() (string, error) {
+	switch *slug {
+	case Cpp:
+		return "cpp", nil
+	case Rust:
+		return "rs", nil
+	case Swift:
+		return "swift", nil
+	case Golang:
+		return "go", nil
+	default:
+		return "", fmt.Errorf("unrecognized lang slug: %s", *slug)
+	}
+}
+
 type CheckResponse struct {
 	StatusCode        Status   `json:"status_code"`
 	Lang              LangSlug `json:"lang"`

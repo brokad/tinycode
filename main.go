@@ -157,7 +157,7 @@ func main() {
 	configStr := flag.String("config", configPathDefault, "the path to the configuration directory")
 	langStr := flag.String("lang", "", "the language of the submission (e.g. rust)")
 	doSubmit := flag.Bool("submit", false, "whether to submit a solution (if not specified, will pull problem statement)")
-	doOpen := flag.Bool("open", false, "whether to open the problem file")
+	doOpen := flag.Bool("open", false, "whether to open the source file")
 
 	doEasy := flag.Bool("easy", false, "")
 	doMedium := flag.Bool("medium", false, "")
@@ -230,6 +230,18 @@ func main() {
 	client, err := NewClient(cookieFile, base)
 	check(err)
 
+	if isSignedIn, err := client.IsSignedIn(); err != nil || !isSignedIn {
+		if err != nil {
+			log.Printf("error trying to check if user is signed in: %s", err)
+		}
+		if !isSignedIn {
+			log.Printf("user is not signed in")
+		}
+		printCookieReadmeAndExit(*backendStr, *cookieJarStr)
+	} else {
+		log.Printf("valid authentication token found")
+	}
+
 	if *slugStr == "" {
 		if *srcStr != "" && *doSubmit {
 			srcFile, err := os.Open(*srcStr)
@@ -264,18 +276,6 @@ func main() {
 		}
 	}
 
-	if isSignedIn, err := client.IsSignedIn(); err != nil || !isSignedIn {
-		if err != nil {
-			log.Printf("error trying to check if user is signed in: %s", err)
-		}
-		if !isSignedIn {
-			log.Printf("user is not signed in")
-		}
-		printCookieReadmeAndExit(*backendStr, *cookieJarStr)
-	} else {
-		log.Printf("valid authentication token found")
-	}
-
 	if *langStr == "" {
 		if *srcStr != "" {
 			spl := strings.Split(*srcStr, ".")
@@ -305,12 +305,20 @@ func main() {
 		if *srcStr == "" {
 			output = os.Stdout
 		} else {
-			if _, err := os.Stat(*srcStr); errors.Is(err, os.ErrNotExist) {
-				output, err = os.Create(*srcStr)
+			stat, err := os.Stat(*srcStr)
+
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				check(err)
-			} else {
-				log.Fatalf("file %s already exists", *srcStr)
+			} else if err == nil && stat.Mode().IsDir() {
+				ext, err := langSlug.Ext()
+				check(err)
+				*srcStr = path.Join(*srcStr, fmt.Sprintf("%s.%s", *slugStr, ext))
+			} else if err == nil && stat.Mode().IsRegular() {
+				log.Fatalf("file already exists: %s, aborting", *srcStr)
 			}
+
+			output, err = os.Create(*srcStr)
+			check(err)
 		}
 
 		fmt.Fprintf(output, "%s", *questionStr)
