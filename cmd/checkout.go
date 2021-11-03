@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/brokad/tinycode/leetcode"
+	"github.com/iancoleman/strcase"
 	"github.com/spf13/cobra"
 	"io"
 	"log"
@@ -108,7 +109,18 @@ var checkoutCmd = &cobra.Command{
 				if err != nil {
 					return err
 				}
-				srcStr = path.Join(srcStr, fmt.Sprintf("%s.%s", slug, ext))
+
+				var filename string
+				switch lang {
+				case leetcode.Swift, leetcode.Java:
+					filename = strcase.ToCamel(slug)
+				case leetcode.Rust:
+					filename = strings.ReplaceAll(slug, "-", "_")
+				default:
+					filename = slug
+				}
+
+				srcStr = path.Join(srcStr, fmt.Sprintf("%s.%s", filename, ext))
 			}
 
 			stat, err = os.Stat(srcStr)
