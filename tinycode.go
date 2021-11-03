@@ -159,15 +159,15 @@ func main() {
 	doSubmit := flag.Bool("submit", false, "whether to submit a solution (if not specified, will pull problem statement)")
 	doOpen := flag.Bool("open", false, "whether to open the source file")
 
-	doEasy := flag.Bool("easy", false, "")
-	doMedium := flag.Bool("medium", false, "")
-	doHard := flag.Bool("hard", false, "")
+	doEasy := flag.Bool("easy", false, "limit search to easy problems")
+	doMedium := flag.Bool("medium", false, "limit search to medium problems")
+	doHard := flag.Bool("hard", false, "limit search to hard problems")
 
-	doTodo := flag.Bool("todo", false, "")
-	doAttempted := flag.Bool("attempted", false, "")
-	doSolved := flag.Bool("solved", false, "")
+	doTodo := flag.Bool("todo", false, "limit search to problems that are to do")
+	doAttempted := flag.Bool("attempted", false, "limit search to problems that have been attempted")
+	doSolved := flag.Bool("solved", false, "limit search to problems that have been solved")
 
-	tagsStr := flag.String("tags", "", "")
+	tagsStr := flag.String("tags", "", "limit search to a collection of tags")
 
 	flag.Parse()
 
