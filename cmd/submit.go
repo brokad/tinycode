@@ -104,13 +104,15 @@ var submitCmd = &cobra.Command{
 			}
 
 			scanner := bufio.NewScanner(srcFile)
-			if scanner.Scan() {
+			for scanner.Scan() {
 				fst := scanner.Text()
-				re := regexp.MustCompile("leetcode metadata: question-id=([\\d]{1,4}) slug=([\\w-]+)")
+				re := regexp.MustCompile("leetcode metadata: question-id=([\\d]+) slug=([\\w-]+)")
 				matches := re.FindStringSubmatch(fst)
+				log.Printf("%v", matches)
 				if len(matches) == 3 {
 					problemId = matches[1]
 					slug = matches[2]
+					break
 				}
 			}
 		}
