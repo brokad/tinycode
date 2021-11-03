@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"github.com/brokad/tinycode/leetcode"
 )
 
 func check(err error) {
@@ -24,8 +25,8 @@ func check(err error) {
 	}
 }
 
-func printCheckResponseAndExit(res *CheckResponse, submissionId int64) {
-	if res.State != Success {
+func printCheckResponseAndExit(res *leetcode.CheckResponse, submissionId int64) {
+	if res.State != leetcode.Success {
 		log.Fatal("checkResponse invalid: State != Success")
 	}
 
@@ -51,21 +52,21 @@ func printCheckResponseAndExit(res *CheckResponse, submissionId int64) {
 		var ctxHeader string
 		var ctxMsg string
 		switch res.StatusCode {
-		case RuntimeError:
+		case leetcode.RuntimeError:
 			errorClass = "runtime error"
 			errorMsg = res.RuntimeError
 			ctxHeader = fmt.Sprintf("last test case: %s", strings.ReplaceAll(res.LastTestCase, "\n", ", "))
 			ctxMsg = fmt.Sprintf("expected output: %s\n\nruntime error: %s\n", res.ExpectedOutput, res.FullRuntimeError)
-		case CompileError:
+		case leetcode.CompileError:
 			errorClass = "compile error"
 			errorMsg = res.CompileError
 			ctxMsg = fmt.Sprintf("%s\n", res.FullCompileError)
-		case WrongAnswer:
+		case leetcode.WrongAnswer:
 			errorClass = "wrong answer"
 			errorMsg = "solution provided an invalid answer"
 			ctxHeader = fmt.Sprintf("on input: %s", res.InputFormatted)
 			ctxMsg = fmt.Sprintf("expected: %s\ngot: %s\n", res.ExpectedOutput, res.CodeOutput)
-		case TimeLimitExceeded:
+		case leetcode.TimeLimitExceeded:
 			errorClass = "time limit exceeded"
 			errorMsg = "solution took too long"
 			ctxHeader = fmt.Sprintf("solution took: %dms", res.ElapsedTime)
@@ -171,14 +172,14 @@ func main() {
 
 	flag.Parse()
 
-	var difficulty DifficultyFilter
+	var difficulty leetcode.DifficultyFilter
 	if *doEasy || *doMedium || *doHard {
 		if *doEasy {
-			difficulty = Easy
+			difficulty = leetcode.Easy
 		} else if *doMedium {
-			difficulty = Medium
+			difficulty = leetcode.Medium
 		} else if *doHard {
-			difficulty = Hard
+			difficulty = leetcode.Hard
 		}
 	}
 
@@ -186,14 +187,14 @@ func main() {
 		log.Printf("-easy/-medium/-hard ignored in -submit mode")
 	}
 
-	var status StatusFilter
+	var status leetcode.StatusFilter
 	if *doTodo || *doAttempted || *doSolved {
 		if *doTodo {
-			status = Todo
+			status = leetcode.Todo
 		} else if *doAttempted {
-			status = Attempted
+			status = leetcode.Attempted
 		} else if *doSolved {
-			status = Solved
+			status = leetcode.Solved
 		}
 	}
 
@@ -239,7 +240,7 @@ func main() {
 	}
 	check(err)
 
-	client, err := NewClient(cookieFile, base)
+	client, err := leetcode.NewClient(cookieFile, base)
 	check(err)
 
 	if isSignedIn, err := client.IsSignedIn(); err != nil || !isSignedIn {
@@ -274,7 +275,7 @@ func main() {
 		if !*doSubmit {
 			log.Printf("no problem-slug provided, picking one at random")
 
-			filters := Filters{
+			filters := leetcode.Filters{
 				difficulty,
 				status,
 				tags,
@@ -295,7 +296,7 @@ func main() {
 			spl := strings.Split(*srcStr, ".")
 			if len(spl) > 1 {
 				ext := spl[len(spl)-1]
-				langSlug, err := NewLangFromExt(ext)
+				langSlug, err := leetcode.NewLangFromExt(ext)
 				*langStr = string(langSlug)
 				check(err)
 			}
@@ -306,7 +307,7 @@ func main() {
 		}
 	}
 
-	langSlug := LangSlug(*langStr)
+	langSlug := leetcode.LangSlug(*langStr)
 
 	if !*doSubmit {
 		questionData, err := client.GetQuestionData(*slugStr)

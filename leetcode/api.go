@@ -1,4 +1,4 @@
-package main
+package leetcode
 
 import (
 	"fmt"
@@ -265,7 +265,7 @@ func stripHtml(s string) string {
 
 func (data *QuestionData) String(langSlug LangSlug) (*string, error) {
 	header := fmt.Sprintf(
-		"leetcode metadata: question-id=%s slug=%s\n\n\n%s:\n\n%s",
+		"Client metadata: question-id=%s slug=%s\n\n\n%s:\n\n%s",
 		data.QuestionId,
 		data.TitleSlug,
 		data.Title,
@@ -318,7 +318,7 @@ func (data *QuestionData) String(langSlug LangSlug) (*string, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("could not find snippet for langSlug=%s in leetcode response", langSlug)
+	return nil, fmt.Errorf("could not find snippet for langSlug=%s in Client response", langSlug)
 }
 
 func (r *CheckResponse) HasSucceeded() bool {

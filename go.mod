@@ -1,4 +1,4 @@
-module tinycode
+module github.com/brokad/tinycode
 
 go 1.17
 

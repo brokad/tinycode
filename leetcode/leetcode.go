@@ -1,4 +1,4 @@
-package main
+package leetcode
 
 import (
 	"bufio"
@@ -104,7 +104,7 @@ func unmarshalFromResponse(resp *http.Response, v interface{}) error {
 
 		resp.Body.Close()
 
-		return fmt.Errorf("invalid status code received from leetcode: %s\n%s", resp.Status, body)
+		return fmt.Errorf("invalid status code received from Client: %s\n%s", resp.Status, body)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -116,12 +116,12 @@ func unmarshalFromResponse(resp *http.Response, v interface{}) error {
 	return json.Unmarshal(body, v)
 }
 
-type leetcode struct {
+type Client struct {
 	raw  http.Client
 	base *url.URL
 }
 
-func NewClient(cookieBuf io.Reader, base *url.URL) (*leetcode, error) {
+func NewClient(cookieBuf io.Reader, base *url.URL) (*Client, error) {
 	cookieJar, err := cookieJarFromReader(cookieBuf, base)
 	if err != nil {
 		return nil, err
@@ -129,10 +129,10 @@ func NewClient(cookieBuf io.Reader, base *url.URL) (*leetcode, error) {
 
 	client := http.Client{Transport: nil, CheckRedirect: nil, Jar: cookieJar}
 
-	return &leetcode{client, base}, nil
+	return &Client{client, base}, nil
 }
 
-func (client *leetcode) Do(method string, rawURL string, input interface{}, output interface{}) error {
+func (client *Client) Do(method string, rawURL string, input interface{}, output interface{}) error {
 	parsedURL, err := url.Parse(rawURL)
 
 	if err != nil {
@@ -176,7 +176,7 @@ func (client *leetcode) Do(method string, rawURL string, input interface{}, outp
 	return unmarshalFromResponse(resp, output)
 }
 
-func (client *leetcode) DoQuery(operationName string, query string, variables interface{}, output interface{}) error {
+func (client *Client) DoQuery(operationName string, query string, variables interface{}, output interface{}) error {
 	graphQlRel, _ := url.Parse("/graphql")
 	graphQlBase := client.base.ResolveReference(graphQlRel).String()
 
@@ -195,7 +195,7 @@ func (client *leetcode) DoQuery(operationName string, query string, variables in
 	return err
 }
 
-func (client *leetcode) IsSignedIn() (bool, error) {
+func (client *Client) IsSignedIn() (bool, error) {
 	query := `
 query globalData {
   userStatus {
@@ -223,7 +223,7 @@ query globalData {
 	}
 }
 
-func (client *leetcode) GetRandomQuestion(filters Filters, categorySlug string) (string, error) {
+func (client *Client) GetRandomQuestion(filters Filters, categorySlug string) (string, error) {
 	query := `
 query randomQuestion($categorySlug: String, $filters: QuestionListFilterInput) {
   randomQuestion(categorySlug: $categorySlug, filters: $filters) {
@@ -266,7 +266,7 @@ query randomQuestion($categorySlug: String, $filters: QuestionListFilterInput) {
 	}
 }
 
-func (client *leetcode) Submit(questionId string, slug string, lang LangSlug, code io.Reader) (*SubmitResponse, error) {
+func (client *Client) Submit(questionId string, slug string, lang LangSlug, code io.Reader) (*SubmitResponse, error) {
 	submissionSrc, err := submissionFromReader(code, lang)
 	if err != nil {
 		return nil, err
@@ -295,9 +295,11 @@ func (client *leetcode) Submit(questionId string, slug string, lang LangSlug, co
 	return &submitResp, nil
 }
 
-func (client *leetcode) WaitUntilCompleteOrTimeOut(submissionId int64, timeOut time.Duration) (*CheckResponse, error) {
+func (client *Client) WaitUntilCompleteOrTimeOut(submissionId int64, timeOut time.Duration) (*CheckResponse, error) {
 	checkPath, err := url.Parse(fmt.Sprintf("/submissions/detail/%d/check/", submissionId))
-	check(err)
+	if err != nil {
+		return nil, err
+	}
 
 	checkUrl := client.base.ResolveReference(checkPath).String()
 
@@ -327,7 +329,7 @@ func (client *leetcode) WaitUntilCompleteOrTimeOut(submissionId int64, timeOut t
 	return nil, fmt.Errorf("request timed out after %s", timeOut)
 }
 
-func (client *leetcode) GetQuestionData(titleSlug string) (*QuestionData, error) {
+func (client *Client) GetQuestionData(titleSlug string) (*QuestionData, error) {
 	query := `
 query questionData($titleSlug: String!) {
   question(titleSlug: $titleSlug) {
