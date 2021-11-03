@@ -265,7 +265,7 @@ func stripHtml(s string) string {
 
 func (data *QuestionData) String(langSlug LangSlug) (*string, error) {
 	header := fmt.Sprintf(
-		"Client metadata: question-id=%s slug=%s\n\n\n%s:\n\n%s",
+		"leetcode metadata: question-id=%s slug=%s\n\n\n%s:\n\n%s",
 		data.QuestionId,
 		data.TitleSlug,
 		data.Title,
