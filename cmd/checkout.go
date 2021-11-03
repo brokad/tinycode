@@ -103,16 +103,15 @@ var checkoutCmd = &cobra.Command{
 			output = os.Stdout
 		} else {
 			stat, err := os.Stat(srcStr)
-
 			if err == nil && stat.Mode().IsDir() {
 				ext, err := lang.Ext()
 				if err != nil {
 					return err
 				}
 				srcStr = path.Join(srcStr, fmt.Sprintf("%s.%s", slug, ext))
-				stat, err = os.Stat(srcStr)
 			}
 
+			stat, err = os.Stat(srcStr)
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				return err
 			} else if err == nil {
