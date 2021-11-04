@@ -3,10 +3,9 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/brokad/tinycode/leetcode"
+	"github.com/brokad/tinycode/provider"
 	"github.com/iancoleman/strcase"
 	"github.com/spf13/cobra"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -18,10 +17,6 @@ var difficultyStr string
 var statusStr string
 var tagsStr string
 
-var difficulty leetcode.DifficultyFilter
-var status leetcode.StatusFilter
-var tags []string
-
 var doOpen bool
 
 var checkoutCmd = &cobra.Command{
@@ -30,56 +25,28 @@ var checkoutCmd = &cobra.Command{
 	Args:    cobra.MaximumNArgs(1),
 	Example: `  tinycode checkout -d easy -l rust ./`,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
-		switch difficultyStr {
-		case "easy":
-			difficulty = leetcode.Easy
-		case "medium":
-			difficulty = leetcode.Medium
-		case "hard":
-			difficulty = leetcode.Hard
-		case "":
-			break
-		default:
-			return fmt.Errorf("unknown difficulty: %s, must be one of: easy, medium, hard", difficultyStr)
+		if difficultyStr != "" {
+			filters.AddFilter("difficulty", difficultyStr)
 		}
 
-		switch statusStr {
-		case "todo":
-			status = leetcode.Todo
-		case "attempted":
-			status = leetcode.Attempted
-		case "solved":
-			status = leetcode.Solved
-		case "":
-			break
-		default:
-			return fmt.Errorf("unknown status: %s, must be one of: todo, attempted, solved", statusStr)
+		if statusStr != "" {
+			filters.AddFilter("status", statusStr)
 		}
 
 		if tagsStr != "" {
-			for _, tag := range strings.Split(tagsStr, ",") {
-				tag = strings.TrimSpace(tag)
-				tags = append(tags, tag)
-			}
+			filters.AddFilter("tags", tagsStr)
 		}
 
-		if slug == "" {
-			log.Printf("no problem-slug provided, picking one at random")
+		if _, err := filters.GetFilter("slug"); err != nil {
+			log.Printf("no problem-slug provided, finding the next one")
 
-			filters := leetcode.Filters{
-				difficulty,
-				status,
-				tags,
-			}
+			newFilters, err := client.FindNextChallenge(filters)
 
-			chosenSlug, err := client.GetRandomQuestion(filters, "")
 			if err != nil {
 				return err
-			} else {
-				slug = chosenSlug
+} else {
+				filters.Update(&newFilters)
 			}
-
-			log.Printf("chose problem: %s", chosenSlug)
 		}
 
 		if len(args) == 0 && doOpen {
@@ -89,35 +56,39 @@ var checkoutCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		questionData, err := client.GetQuestionData(slug)
+		questionData, err := client.GetChallenge(filters)
 		if err != nil {
 			return err
 		}
 
-		questionStr, err := questionData.String(lang)
-		if err != nil {
+		var buf strings.Builder
+		if err := provider.EncodeChallenge(backend, lang, filters, questionData, &buf); err != nil {
 			return err
 		}
+		questionStr := buf.String()
 
-		var output io.Writer
+		questionIdentity := questionData.Identify()
+
 		if srcStr == "" {
-			output = os.Stdout
+			fmt.Fprintf(os.Stdout, "%s", questionStr)
 		} else {
 			stat, err := os.Stat(srcStr)
 			if err == nil && stat.Mode().IsDir() {
-				ext, err := lang.Ext()
+				questionSlug, err := questionIdentity.GetFilter("slug")
 				if err != nil {
 					return err
 				}
 
+				ext := lang.Ext()
+
 				var filename string
-				switch lang {
-				case leetcode.Swift, leetcode.Java:
-					filename = strcase.ToCamel(slug)
-				case leetcode.Rust:
-					filename = strings.ReplaceAll(slug, "-", "_")
+				switch lang.String() {
+				case provider.Swift, provider.Java:
+					filename = strcase.ToCamel(questionSlug)
+				case provider.Rust:
+					filename = strings.ReplaceAll(questionSlug, "-", "_")
 				default:
-					filename = slug
+					filename = questionSlug
 				}
 
 				srcStr = path.Join(srcStr, fmt.Sprintf("%s.%s", filename, ext))
@@ -128,31 +99,32 @@ var checkoutCmd = &cobra.Command{
 				return err
 			} else if err == nil {
 				log.Printf("file already exists: %s, not writing anything", srcStr)
-				srcStr = os.DevNull
+			} else {
+				log.Printf("writing to file %s", srcStr)
+
+				output, err := os.Create(srcStr)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(output, "%s", questionStr)
+				fmt.Fprintf(os.Stdout, "%s", srcStr)
 			}
 
-			output, err = os.Create(srcStr)
-			if err != nil {
-				return err
-			}
-		}
+			if doOpen {
+				editor := os.Getenv("EDITOR")
+				if editor == "" {
+					log.Fatal("no $EDITOR set, try `export EDITOR=emacs`")
+				}
 
-		fmt.Fprintf(output, "%s", *questionStr)
+				editorCmd := exec.Command(editor, srcStr)
 
-		if doOpen && srcStr != "" {
-			editor := os.Getenv("EDITOR")
-			if editor == "" {
-				log.Fatal("no $EDITOR set, try `export EDITOR=emacs`")
-			}
+				if err := editorCmd.Start(); err != nil {
+					return err
+				}
 
-			editorCmd := exec.Command(editor, srcStr)
-
-			if err := editorCmd.Start(); err != nil {
-				return err
-			}
-
-			if err := editorCmd.Wait(); err != nil {
-				return err
+				if err := editorCmd.Wait(); err != nil {
+					return err
+				}
 			}
 		}
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/brokad/tinycode/leetcode"
+	"github.com/brokad/tinycode/provider"
 	"github.com/spf13/cobra"
 	"log"
 	"net/url"
@@ -15,18 +16,24 @@ import (
 
 var backend string
 var configPath string
+
+// Filters
 var langStr string
+var lang provider.Lang
 
 var problemId string
-var slug string
-var lang leetcode.LangSlug
+var problemSlug string
+
+var filters = provider.Filters{}
 
 var baseStr string
 var pwd string
 var baseUrl *url.URL
 var srcStr string
 
-var client *leetcode.Client
+var debug bool
+
+var client provider.Provider
 
 func printCookieReadmeAndExit(provider string, path string) {
 	var instructions string
@@ -67,14 +74,23 @@ these instructions to obtain one:
 
 var rootCmd = &cobra.Command{
 	Use: "tinycode",
-	Short:   "Crunch LeetCode questions in your favorite IDE, not in the browser",
+	Short:   "Crunch competitive coding questions in your favorite IDE, not in the browser",
 	Example: `  tinycode checkout --difficulty easy --open problem.cpp
   tinycode submit problem.cpp`,
 	Version: "0.1.0",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if debug {
+			log.SetOutput(os.Stderr)
+		} else {
+			devNull, _ := os.Create(os.DevNull)
+			log.SetOutput(devNull)
+		}
+
 		switch backend {
 		case "leetcode":
 			baseStr = "https://leetcode.com"
+		case "hackerrank":
+			baseStr = "https://hackerrank.com"
 		default:
 			return fmt.Errorf("unknown provider: %s", backend)
 		}
@@ -115,8 +131,8 @@ var rootCmd = &cobra.Command{
 			spl := strings.Split(args[0], ".")
 			if len(spl) > 1 {
 				ext := spl[len(spl)-1]
-				langSlug, err := leetcode.NewLangFromExt(ext)
-				langStr = string(langSlug)
+				parsedLang, err := provider.ParseExt(ext)
+				langStr = parsedLang.String()
 				if err != nil {
 					return err
 				}
@@ -124,13 +140,32 @@ var rootCmd = &cobra.Command{
 		}
 
 		if langStr != "" {
-			lang = leetcode.LangSlug(langStr)
+			if parsedLang, err := provider.ParseLang(langStr); err != nil {
+				return err
+			} else {
+				lang = *parsedLang
+			}
+
+			langStr, err = client.LocalizeLanguage(lang)
+			if err != nil {
+				return err
+			}
+
+			filters.AddFilter("lang", langStr)
 		} else {
 			return fmt.Errorf("a --lang must be provided (e.g. rust)")
 		}
 
 		if len(args) != 0 {
 			srcStr = args[0]
+		}
+
+		if problemId != "" {
+			filters.AddFilter("id", problemId)
+		}
+
+		if problemSlug != "" {
+			filters.AddFilter("slug", problemSlug)
 		}
 
 		return nil
@@ -145,20 +180,21 @@ func init() {
 	home := usr.HomeDir
 	configPathDefault := path.Join(home, ".config/tinycode")
 
-	rootCmd.Flags().StringVar(&configPath, "config", configPathDefault, "the path to the configuration directory")
+	rootCmd.PersistentFlags().StringVar(&configPath, "config", configPathDefault, "the path to the configuration directory")
 	rootCmd.MarkFlagDirname("config")
-	rootCmd.Flags().StringVar(&backend, "backend", "leetcode", "which problem set provider to use (only leetcode allowed)")
+	rootCmd.PersistentFlags().StringVar(&backend, "backend", "leetcode", "which problem set provider to use (leetcode or hackerrank)")
+	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debugging output")
 
 	checkoutCmd.Flags().StringVarP(&difficultyStr, "difficulty", "d", "", "limit search to a given difficulty (easy, medium, hard)")
 	checkoutCmd.Flags().StringVar(&statusStr, "status", "", "limit search to a given status (todo, attempted, solved)")
 	checkoutCmd.Flags().StringVarP(&tagsStr, "tags", "t", "", "limit search to a given list of (comma-separated) tags")
-	checkoutCmd.Flags().StringVarP(&slug, "problem-slug", "p", "", "slug of a problem (e.g. two-sum)")
+	checkoutCmd.Flags().StringVarP(&problemSlug, "problem-slug", "p", "", "slug of a problem (e.g. two-sum)")
 	checkoutCmd.Flags().StringVarP(&problemId, "problem-id", "i", "", "id of a problem (e.g. 1)")
 	checkoutCmd.Flags().StringVarP(&langStr, "lang", "l", "", "target language of the submission (e.g. cpp)")
 	checkoutCmd.Flags().BoolVarP(&doOpen, "open", "o", false, "whether to open the file")
 	rootCmd.AddCommand(checkoutCmd)
 
-	submitCmd.Flags().StringVarP(&slug, "problem-slug", "p", "", "slug of a problem (e.g. two-sum)")
+	submitCmd.Flags().StringVarP(&problemSlug, "problem-slug", "p", "", "slug of a problem (e.g. two-sum)")
 	submitCmd.Flags().StringVarP(&problemId, "problem-id", "i", "", "id of a problem (e.g. 1)")
 	submitCmd.Flags().StringVarP(&langStr, "lang", "l", "", "target language of the submission (e.g. cpp)")
 	rootCmd.AddCommand(submitCmd)

@@ -1,198 +1,39 @@
 package leetcode
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/json"
 	"fmt"
+	"github.com/brokad/tinycode/provider"
 	"io"
 	"log"
-	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"time"
 )
 
-func cookiesFromString(cookies string) ([]*http.Cookie, error) {
-	reqStr := fmt.Sprintf("GET / HTTP/1.0\r\nCookie: %s\r\n\r\n", cookies)
-	req, err := http.ReadRequest(bufio.NewReader(strings.NewReader(reqStr)))
-	return req.Cookies(), err
-}
-
-func cookieJarFromReader(reader io.Reader, url *url.URL) (http.CookieJar, error) {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, err
-	}
-
-	buf, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-
-	allCookies, err := cookiesFromString(string(buf))
-	if err != nil {
-		return nil, err
-	}
-
-	var cookies []*http.Cookie
-	for _, cookie := range allCookies {
-		if cookie.Name == "csrftoken" || cookie.Name == "LEETCODE_SESSION" {
-			cookies = append(cookies, cookie)
-		}
-	}
-
-	jar.SetCookies(url, cookies)
-
-	return jar, nil
-}
-
-func submissionFromReader(reader io.Reader, lang LangSlug) (*string, error) {
-	buf := bytes.Buffer{}
-
-	prefix, _, _, single, err := lang.Comment()
-	if err != nil {
-		return nil, err
-	}
-
-	if single == "" {
-		single = prefix
-	}
-
-	regionBegin := fmt.Sprintf("%sleetcode submit region begin", single)
-	regionEnd := fmt.Sprintf("%sleetcode submit region end", single)
-
-	scanner := bufio.NewScanner(reader)
-
-	const (
-		SubmissionCode = iota
-		Otherwise
-	)
-
-	mode := Otherwise
-	for scanner.Scan() {
-		line := string(scanner.Bytes())
-
-		if strings.HasPrefix(line, regionBegin) {
-			mode = SubmissionCode
-			continue
-		} else if strings.HasPrefix(line, regionEnd) {
-			break
-		}
-
-		if mode == SubmissionCode {
-			buf.WriteString(fmt.Sprintln(line))
-		}
-	}
-
-	if mode != SubmissionCode {
-		return nil, fmt.Errorf("provided source does not have a submission region")
-	}
-
-	output := buf.String()
-	return &output, nil
-}
-
-func unmarshalFromResponse(resp *http.Response, v interface{}) error {
-	if resp.StatusCode != 200 {
-		body, err := io.ReadAll(resp.Body)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		resp.Body.Close()
-
-		return fmt.Errorf("invalid status code received from Client: %s\n%s", resp.Status, body)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return json.Unmarshal(body, v)
-}
-
 type Client struct {
-	raw  http.Client
-	base *url.URL
+	transport provider.TransportClient
 }
 
 func NewClient(cookieBuf io.Reader, base *url.URL) (*Client, error) {
-	cookieJar, err := cookieJarFromReader(cookieBuf, base)
+	cookieJar, err := provider.CookieJarFromReader(cookieBuf, base, []string{"csrftoken", "LEETCODE_SESSION"})
 	if err != nil {
 		return nil, err
 	}
 
-	client := http.Client{Transport: nil, CheckRedirect: nil, Jar: cookieJar}
-
-	return &Client{client, base}, nil
-}
-
-func (client *Client) Do(method string, rawURL string, input interface{}, output interface{}) error {
-	parsedURL, err := url.Parse(rawURL)
-
-	if err != nil {
-		return err
-	}
-
-	root, _ := url.Parse("/")
-	baseUrl := parsedURL.ResolveReference(root)
-
-	marshalled, err := json.Marshal(input)
-
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest(method, rawURL, bytes.NewBuffer(marshalled))
-
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Referer", rawURL)
-
-	var csrf_token string
-	for _, cookie := range client.raw.Jar.Cookies(baseUrl) {
+	var csrfToken string
+	for _, cookie := range cookieJar.Cookies(base) {
 		if cookie.Name == "csrftoken" {
-			csrf_token = cookie.Value
+			csrfToken = cookie.Value
 		}
 	}
 
-	req.Header.Set("X-CSRFToken", csrf_token)
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-
-	resp, err := client.raw.Do(req)
-
-	if err != nil {
-		return err
+	if csrfToken == "" {
+		return nil, fmt.Errorf("could not find csrftoken cookie: try logging in to leetcode again")
 	}
 
-	return unmarshalFromResponse(resp, output)
-}
+	transport := provider.NewTransportClient(cookieJar, *base, csrfToken)
 
-func (client *Client) DoQuery(operationName string, query string, variables interface{}, output interface{}) error {
-	graphQlRel, _ := url.Parse("/graphql")
-	graphQlBase := client.base.ResolveReference(graphQlRel).String()
-
-	type Query struct {
-		OperationName string      `json:"operationName"`
-		Query         string      `json:"query"`
-		Variables     interface{} `json:"variables"`
-	}
-
-	req := Query{
-		operationName,
-		query,
-		variables,
-	}
-	err := client.Do("POST", graphQlBase, req, output)
-	return err
+	return &Client{transport}, nil
 }
 
 func (client *Client) IsSignedIn() (bool, error) {
@@ -216,20 +57,26 @@ query globalData {
 
 	output := QueryResult{}
 
-	if err := client.DoQuery("globalData", query, nil, &output); err != nil {
+	if err := client.transport.DoQuery("globalData", query, nil, &output); err != nil {
 		return false, err
 	} else {
 		return output.Data.UserStatus.IsSignedIn, nil
 	}
 }
 
-func (client *Client) GetRandomQuestion(filters Filters, categorySlug string) (string, error) {
+func (client *Client) GetRandomQuestionSlug(difficulty DifficultyFilter, status StatusFilter, tags []string, categorySlug string) (string, error) {
 	query := `
 query randomQuestion($categorySlug: String, $filters: QuestionListFilterInput) {
   randomQuestion(categorySlug: $categorySlug, filters: $filters) {
     titleSlug
   }
 }`
+
+	filters := Filters {
+		difficulty,
+		status,
+		tags,
+	}
 
 	type Variables struct {
 		CategorySlug string  `json:"categorySlug"`
@@ -254,7 +101,7 @@ query randomQuestion($categorySlug: String, $filters: QuestionListFilterInput) {
 	}
 
 	output := QueryResult{}
-	if err := client.DoQuery("randomQuestion", query, variables, &output); err != nil {
+	if err := client.transport.DoQuery("randomQuestion", query, variables, &output); err != nil {
 		return "", err
 	} else {
 		titleSlug := output.Data.RandomQuestion.TitleSlug
@@ -266,25 +113,57 @@ query randomQuestion($categorySlug: String, $filters: QuestionListFilterInput) {
 	}
 }
 
-func (client *Client) Submit(questionId string, slug string, lang LangSlug, code io.Reader) (*SubmitResponse, error) {
-	submissionSrc, err := submissionFromReader(code, lang)
+func (client *Client) FindNextChallenge(filters provider.Filters) (provider.Filters, error) {
+	var err error
+	var output provider.Filters
+
+	difficultyStr := filters.GetFilterOrDefault("difficulty")
+	difficulty, err := ParseDifficulty(difficultyStr)
+	if err != nil {
+		return output, err
+	}
+
+	statusStr := filters.GetFilterOrDefault("status")
+	status, err := ParseStatus(statusStr)
+	if err != nil {
+		return output, err
+	}
+
+	var tags []string
+	tagsStr := filters.GetFilterOrDefault("tags")
+
+	if tagsStr != "" {
+		for _, tag := range strings.Split(tagsStr, ",") {
+			tag = strings.TrimSpace(tag)
+			tags = append(tags, tag)
+		}
+	}
+
+	questionSlug, err := client.GetRandomQuestionSlug(*difficulty, *status, tags, "")
+	if err != nil {
+		return output, err
+	}
+
+	if err := output.AddFilter("slug", questionSlug); err != nil {
+		return output, err
+	} else {
+		return output, nil
+	}
+}
+
+func (client *Client) SubmitCode(questionId string, slug string, lang string, code string) (*SubmitResponse, error) {
+	submitPath, err := url.Parse(fmt.Sprintf("/problems/%s/submit/", slug))
 	if err != nil {
 		return nil, err
 	}
 
-	path, err := url.Parse(fmt.Sprintf("/problems/%s/submit/", slug))
-	if err != nil {
-		return nil, err
-	}
+	log.Printf("submit path: %s", submitPath)
 
-	submitUrl := client.base.ResolveReference(path).String()
-	log.Printf("submit url: %s", submitUrl)
-
-	submitRequest := SubmitRequest{Lang: lang, QuestionId: questionId, TypedCode: *submissionSrc}
+	submitRequest := SubmitRequest{Lang: lang, QuestionId: questionId, TypedCode: code}
 
 	submitResp := SubmitResponse{}
 
-	err = client.Do("POST", submitUrl, &submitRequest, &submitResp)
+	err = client.transport.Do("POST", submitPath.String(), &submitRequest, &submitResp)
 	if err != nil {
 		return nil, err
 	}
@@ -295,20 +174,44 @@ func (client *Client) Submit(questionId string, slug string, lang LangSlug, code
 	return &submitResp, nil
 }
 
+func (client *Client) Submit(filters provider.Filters, code string) (provider.SubmissionReport, error) {
+	questionId, err := filters.GetFilter("id")
+	if err != nil {
+		return nil, err
+	}
+
+	slug, err := filters.GetFilter("slug")
+	if err != nil {
+		return nil, err
+	}
+
+	langStr, err := filters.GetFilter("lang")
+	if err != nil {
+		return nil, err
+	}
+
+	submitResponse, err := client.SubmitCode(questionId, slug, langStr, code)
+	if err != nil {
+		return nil, err
+	}
+
+	submissionId := submitResponse.SubmissionId
+
+	return client.WaitUntilCompleteOrTimeOut(submissionId, 120*time.Second)
+}
+
 func (client *Client) WaitUntilCompleteOrTimeOut(submissionId int64, timeOut time.Duration) (*CheckResponse, error) {
 	checkPath, err := url.Parse(fmt.Sprintf("/submissions/detail/%d/check/", submissionId))
 	if err != nil {
 		return nil, err
 	}
 
-	checkUrl := client.base.ResolveReference(checkPath).String()
-
 	backoff := 25 * time.Millisecond
 
 	start := time.Now()
 	for {
 		checkResp := CheckResponse{}
-		err := client.Do("GET", checkUrl, nil, &checkResp)
+		err := client.transport.Do("GET", checkPath.String(), nil, &checkResp)
 		if err != nil {
 			return nil, err
 		}
@@ -368,10 +271,22 @@ query questionData($titleSlug: String!) {
 
 	res := QueryResult{}
 
-	err := client.DoQuery("questionData", query, variables, &res)
+	err := client.transport.DoQuery("questionData", query, variables, &res)
 	if err != nil {
 		return nil, err
 	}
 
 	return &res.Data.Question, nil
+}
+
+func (client *Client) GetChallenge(filters provider.Filters) (provider.Challenge, error) {
+	if slug, err := filters.GetFilter("slug"); err == nil {
+		return client.GetQuestionData(slug)
+	} else {
+		return nil, err
+	}
+}
+
+func (client *Client) LocalizeLanguage(lang provider.Lang) (string, error) {
+	return lang.String(), nil
 }
