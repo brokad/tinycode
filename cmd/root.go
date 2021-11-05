@@ -1,11 +1,12 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
+	"github.com/brokad/tinycode/hackerrank"
 	"github.com/brokad/tinycode/leetcode"
 	"github.com/brokad/tinycode/provider"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"log"
 	"net/url"
 	"os"
@@ -23,6 +24,7 @@ var lang provider.Lang
 
 var problemId string
 var problemSlug string
+var contestSlug string
 
 var filters = provider.Filters{}
 
@@ -31,31 +33,21 @@ var pwd string
 var baseUrl *url.URL
 var srcStr string
 
+var doPurchase bool
+
 var debug bool
+
+var config provider.Config
 
 var client provider.Provider
 
-func printCookieReadmeAndExit(provider string, path string) {
+func printCookieReadmeAndExit(provider string) {
 	var instructions string
 	switch provider {
 	case "leetcode":
 		instructions = fmt.Sprintf(`
   (1) Head over to https://leetcode.com/accounts/login/ and login to leetcode
-
-  (2) Open the development console (e.g. F12 for Firefox)
-
-  (3) Open the network inspection tab (e.g. Network for Firefox)
-
-  (4) Look for an API call to 'graphql', refreshing the page if necessary
-  
-  (5) In the request header section of the inspector window, look for 'Cookie: '
-      header and copy/paste the _value_ to the file:
-
-         %s
-
-Be careful to include the whole cookie as some browsers (e.g. Firefox) truncate
-their output in the inspector window. Follow your browser's documentation (e.g. 
-for Firefox click on the 'Raw' toggle).`, path)
+      using Firefox or Chrome/Chromium`)
 	default:
 		log.Panicf("unknown provider: %s", provider)
 	}
@@ -73,8 +65,8 @@ these instructions to obtain one:
 }
 
 var rootCmd = &cobra.Command{
-	Use: "tinycode",
-	Short:   "Crunch competitive coding questions in your favorite IDE, not in the browser",
+	Use:   "tinycode",
+	Short: "Crunch competitive coding questions in your favorite IDE, not in the browser",
 	Example: `  tinycode checkout --difficulty easy --open problem.cpp
   tinycode submit problem.cpp`,
 	Version: "0.1.0",
@@ -86,33 +78,44 @@ var rootCmd = &cobra.Command{
 			log.SetOutput(devNull)
 		}
 
+		if err := viper.ReadInConfig(); err != nil {
+			return err
+		}
+
+		if err := viper.Unmarshal(&config); err != nil {
+			return err
+		}
+
+		backendConfig, in := config.Backend[backend]
+		if !in {
+			printCookieReadmeAndExit(backend)
+		}
+
 		switch backend {
 		case "leetcode":
-			baseStr = "https://leetcode.com"
+			baseStr = "https://www.leetcode.com"
+			base, err := url.Parse(baseStr)
+			if err != nil {
+				return err
+			}
+			client, err = leetcode.NewClient(backendConfig, base)
+			if err != nil {
+				return err
+			}
 		case "hackerrank":
-			baseStr = "https://hackerrank.com"
+			baseStr = "https://www.hackerrank.com"
+			base, err := url.Parse(baseStr)
+			if err != nil {
+				return err
+			}
+			hrClient, err := hackerrank.NewClient(backendConfig, base)
+			if err != nil {
+				return err
+			}
+			hrClient.DoPurchase = doPurchase
+			client = hrClient
 		default:
 			return fmt.Errorf("unknown provider: %s", backend)
-		}
-
-		base, err := url.Parse(baseStr)
-		if err != nil {
-			return err
-		} else {
-			baseUrl = base
-		}
-
-		cookieJarStr := path.Join(configPath, fmt.Sprintf("%s.cookies", backend))
-		cookieFile, err := os.Open(cookieJarStr)
-		if errors.Is(err, os.ErrNotExist) {
-			printCookieReadmeAndExit(backend, cookieJarStr)
-		} else if err != nil {
-			return err
-		}
-
-		client, err = leetcode.NewClient(cookieFile, base)
-		if err != nil {
-			return err
 		}
 
 		if isSignedIn, err := client.IsSignedIn(); err != nil || !isSignedIn {
@@ -122,7 +125,7 @@ var rootCmd = &cobra.Command{
 			if !isSignedIn {
 				log.Printf("user is not signed in")
 			}
-			printCookieReadmeAndExit(backend, cookieJarStr)
+			printCookieReadmeAndExit(backend)
 		} else {
 			log.Printf("valid authentication token found")
 		}
@@ -146,9 +149,11 @@ var rootCmd = &cobra.Command{
 				lang = *parsedLang
 			}
 
-			langStr, err = client.LocalizeLanguage(lang)
+			localLangStr, err := client.LocalizeLanguage(lang)
 			if err != nil {
 				return err
+			} else {
+				langStr = localLangStr
 			}
 
 			filters.AddFilter("lang", langStr)
@@ -166,6 +171,14 @@ var rootCmd = &cobra.Command{
 
 		if problemSlug != "" {
 			filters.AddFilter("slug", problemSlug)
+		}
+
+		if contestSlug == "" && backend == "hackerrank" {
+			contestSlug = "master"
+		}
+
+		if contestSlug != "" {
+			filters.AddFilter("contest", contestSlug)
 		}
 
 		return nil
@@ -188,18 +201,26 @@ func init() {
 	checkoutCmd.Flags().StringVarP(&difficultyStr, "difficulty", "d", "", "limit search to a given difficulty (easy, medium, hard)")
 	checkoutCmd.Flags().StringVar(&statusStr, "status", "", "limit search to a given status (todo, attempted, solved)")
 	checkoutCmd.Flags().StringVarP(&tagsStr, "tags", "t", "", "limit search to a given list of (comma-separated) tags")
-	checkoutCmd.Flags().StringVarP(&problemSlug, "problem-slug", "p", "", "slug of a problem (e.g. two-sum)")
-	checkoutCmd.Flags().StringVarP(&problemId, "problem-id", "i", "", "id of a problem (e.g. 1)")
+	checkoutCmd.Flags().StringVarP(&problemSlug, "problem", "p", "", "slug of a problem (e.g. two-sum)")
+	checkoutCmd.Flags().StringVarP(&problemId, "id", "i", "", "id of a problem (e.g. 1)")
 	checkoutCmd.Flags().StringVarP(&langStr, "lang", "l", "", "target language of the submission (e.g. cpp)")
+	checkoutCmd.Flags().StringVarP(&contestSlug, "contest", "c",  "","contest to which the problem belong (hackerrank only)")
 	checkoutCmd.Flags().BoolVarP(&doOpen, "open", "o", false, "whether to open the file")
 	rootCmd.AddCommand(checkoutCmd)
 
-	submitCmd.Flags().StringVarP(&problemSlug, "problem-slug", "p", "", "slug of a problem (e.g. two-sum)")
-	submitCmd.Flags().StringVarP(&problemId, "problem-id", "i", "", "id of a problem (e.g. 1)")
+	submitCmd.Flags().StringVarP(&problemSlug, "problem", "p", "", "slug of a problem (e.g. two-sum)")
+	submitCmd.Flags().StringVarP(&problemId, "id", "i", "", "id of a problem (e.g. 1)")
 	submitCmd.Flags().StringVarP(&langStr, "lang", "l", "", "target language of the submission (e.g. cpp)")
+	submitCmd.Flags().BoolVar(&doPurchase, "purchase", false, "whether to purchase the last failed testcase (hackerrank only)")
 	rootCmd.AddCommand(submitCmd)
 
 	pwd, _ = os.Getwd()
+
+	viper.SetConfigName("config")
+	viper.SetConfigType("toml")
+	viper.SetDefault("backend.leetcode.csrf-header", "x-csrftoken")
+	viper.SetDefault("backend.hackerrank.csrf-header", "X-CSRF-Token")
+	viper.AddConfigPath(configPath)
 }
 
 func Execute() {

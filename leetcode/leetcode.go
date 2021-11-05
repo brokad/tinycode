@@ -3,7 +3,6 @@ package leetcode
 import (
 	"fmt"
 	"github.com/brokad/tinycode/provider"
-	"io"
 	"log"
 	"net/url"
 	"strings"
@@ -14,8 +13,12 @@ type Client struct {
 	transport provider.TransportClient
 }
 
-func NewClient(cookieBuf io.Reader, base *url.URL) (*Client, error) {
-	cookieJar, err := provider.CookieJarFromReader(cookieBuf, base, []string{"csrftoken", "LEETCODE_SESSION"})
+func NewClient(config provider.BackendConfig, base *url.URL) (*Client, error) {
+	cookies := map[string]string{
+		"csrftoken": config.Csrf,
+		"LEETCODE_SESSION": config.Auth,
+	}
+	cookieJar, err := provider.CookieJarFromMap(cookies, base)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +34,7 @@ func NewClient(cookieBuf io.Reader, base *url.URL) (*Client, error) {
 		return nil, fmt.Errorf("could not find csrftoken cookie: try logging in to leetcode again")
 	}
 
-	transport := provider.NewTransportClient(cookieJar, *base, csrfToken)
+	transport := provider.NewTransportClient(cookieJar, *base, csrfToken, config.CsrfHeader)
 
 	return &Client{transport}, nil
 }
@@ -197,7 +200,7 @@ func (client *Client) Submit(filters provider.Filters, code string) (provider.Su
 
 	submissionId := submitResponse.SubmissionId
 
-	return client.WaitUntilCompleteOrTimeOut(submissionId, 120*time.Second)
+	return client.WaitUntilCompleteOrTimeOut(submissionId, 5*time.Second)
 }
 
 func (client *Client) WaitUntilCompleteOrTimeOut(submissionId int64, timeOut time.Duration) (*CheckResponse, error) {

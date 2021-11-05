@@ -45,3 +45,20 @@ func CookieJarFromReader(reader io.Reader, url *url.URL, filter []string) (http.
 
 	return jar, nil
 }
+
+func CookieJarFromMap(m map[string]string, url *url.URL) (http.CookieJar, error) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var cookies []*http.Cookie
+	for name, value := range m {
+		cookie := http.Cookie{Name: name, Value: value}
+		cookies = append(cookies, &cookie)
+	}
+
+	jar.SetCookies(url, cookies)
+
+	return jar, nil
+}

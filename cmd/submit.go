@@ -14,7 +14,11 @@ import (
 )
 
 func printSubmitReportAndExit(report provider.SubmissionReport) {
-	summary, _ := report.Summary()
+	summary, err := report.Summary()
+	if err != nil {
+		panic(err)
+	}
+
 	if report.HasSucceeded() {
 		log.Printf("%s: run succeeded", report.Identify())
 		header := color.New(color.Bold, color.FgGreen)

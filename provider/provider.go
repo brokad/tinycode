@@ -25,7 +25,7 @@ func (filters *Filters) GetFilter(name string) (string, error) {
 }
 
 func (filters *Filters) Update(other *Filters) {
-	for k,v := range other.raw {
+	for k, v := range other.raw {
 		_ = filters.AddFilter(k, v)
 	}
 }
@@ -68,8 +68,7 @@ func (filters *Filters) Render(buf io.StringWriter) error {
 func ParseFilters(s string) *Filters {
 	var output Filters
 	re := regexp.MustCompile("([\\w-]+)=([\\w-]+)")
-	for _, matches := range re.FindAllStringSubmatch(s, -1) {
-		// Does not error handling because validation is ensured by the regex
+	for _, matches := range re.FindAllStringSubmatch(s, -1) {		// Does not error handling because validation is ensured by the regex
 		_ = output.AddFilter(matches[1], matches[2])
 	}
 	return &output
@@ -106,6 +105,7 @@ type SubmissionStatistics struct {
 	RuntimePercentile float64
 	Memory            string
 	MemoryPercentile  float64
+	Score             string
 }
 
 type ErrorReport struct {
@@ -275,7 +275,7 @@ func ParseExt(ext string) (*Lang, error) {
 	default:
 		return nil, fmt.Errorf("unrecognized file extension: %s", ext)
 	}
-	return &Lang { raw }, nil
+	return &Lang{raw}, nil
 }
 
 func (lang *Lang) Ext() string {
@@ -288,6 +288,8 @@ func (lang *Lang) Ext() string {
 		return "swift"
 	case Golang:
 		return "go"
+	case C:
+		return "c"
 	default:
 		panic(fmt.Sprintf("unknown lang: %s", lang.raw))
 	}
@@ -352,7 +354,7 @@ func EncodeChallenge(backend string, lang Lang, filters Filters, challenge Chall
 func DecodeSolution(backend string, reader io.Reader) (*string, error) {
 	buf := bytes.Buffer{}
 
-	regionBegin := fmt.Sprintf("%s submit region begin",  backend)
+	regionBegin := fmt.Sprintf("%s submit region begin", backend)
 	reBegin := regexp.MustCompile(regionBegin)
 
 	regionEnd := fmt.Sprintf("%s submit region end", backend)

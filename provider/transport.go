@@ -11,17 +11,19 @@ import (
 )
 
 type TransportClient struct {
-	raw       http.Client
-	base      url.URL
-	csrfToken string
+	raw             http.Client
+	base            url.URL
+	csrfToken       string
+	csrfTokenHeader string
 }
 
-func NewTransportClient(jar http.CookieJar, base url.URL, csrfToken string) TransportClient {
+func NewTransportClient(jar http.CookieJar, base url.URL, csrfToken string, csrfTokenHeader string) TransportClient {
 	raw := http.Client{Transport: nil, CheckRedirect: nil, Jar: jar}
 	return TransportClient{
 		raw,
 		base,
 		csrfToken,
+		csrfTokenHeader,
 	}
 }
 
@@ -65,11 +67,12 @@ func (client *TransportClient) Do(method string, path string, input interface{},
 		return err
 	}
 
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Referer", reqUrl.String())
-
-	req.Header.Set("x-csrftoken", client.csrfToken)
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("Host", client.base.Host)
+	req.Header.Set(client.csrfTokenHeader, client.csrfToken)
+	//req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
 	resp, err := client.raw.Do(req)
 	if err != nil {
@@ -78,7 +81,6 @@ func (client *TransportClient) Do(method string, path string, input interface{},
 
 	return unmarshalFromResponse(resp, output)
 }
-
 
 func (client *TransportClient) DoQuery(operationName string, query string, variables interface{}, output interface{}) error {
 	graphQlRel, _ := url.Parse("/graphql")
