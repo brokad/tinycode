@@ -61,7 +61,7 @@ func (client *TransportClient) Do(method string, path string, input interface{},
 		return err
 	}
 
-	req, err := http.NewRequest(method, reqUrl.String(), io.NopCloser(bytes.NewReader(marshalled)))
+	req, err := http.NewRequest(method, reqUrl.String(), bytes.NewReader(marshalled))
 	if err != nil {
 		return err
 	}

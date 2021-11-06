@@ -134,7 +134,7 @@ var rootCmd = &cobra.Command{
 		// instantiate the backend client
 		switch backend {
 		case "leetcode":
-			baseStr = "https://www.leetcode.com"
+			baseStr = "https://leetcode.com"
 			base, err := url.Parse(baseStr)
 			if err != nil {
 				return err
