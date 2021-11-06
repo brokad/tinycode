@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 )
@@ -32,7 +31,7 @@ func unmarshalFromResponse(resp *http.Response, v interface{}) error {
 		body, err := io.ReadAll(resp.Body)
 
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		resp.Body.Close()
@@ -43,7 +42,7 @@ func unmarshalFromResponse(resp *http.Response, v interface{}) error {
 	body, err := io.ReadAll(resp.Body)
 
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	return json.Unmarshal(body, v)
@@ -62,7 +61,7 @@ func (client *TransportClient) Do(method string, path string, input interface{},
 		return err
 	}
 
-	req, err := http.NewRequest(method, reqUrl.String(), bytes.NewBuffer(marshalled))
+	req, err := http.NewRequest(method, reqUrl.String(), io.NopCloser(bytes.NewReader(marshalled)))
 	if err != nil {
 		return err
 	}
@@ -94,7 +93,7 @@ func (client *TransportClient) DoQuery(operationName string, query string, varia
 		variables,
 	}
 
-	err := client.Do("POST", "/graphql", &req, output)
+	err := client.Do("POST", "/graphql", req, output)
 
 	return err
 }
