@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/brokad/tinycode/provider"
 	"github.com/iancoleman/strcase"
+	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
 	"log"
 	"os"
@@ -16,8 +17,29 @@ import (
 var difficultyStr string
 var statusStr string
 var tagsStr string
+var trackStr string
 
 var doOpen bool
+var doSubmit bool
+
+func toFileIfNotExists(path string, content string) error {
+	_, err := os.Stat(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	} else if err == nil {
+		log.Printf("file already exists: %s, not writing anything", path)
+	} else {
+		log.Printf("writing to file %s", path)
+		output, err := os.Create(path)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(output, "%s", content)
+		output.Close()
+	}
+	fmt.Fprintf(os.Stdout, "%s\n", path)
+	return nil
+}
 
 var checkoutCmd = &cobra.Command{
 	Use:     "checkout [-p problem-slug | -i problem-id] [-d difficulty] [-l language] [path]",
@@ -26,15 +48,27 @@ var checkoutCmd = &cobra.Command{
 	Example: `  tinycode checkout -d easy -l rust ./`,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if difficultyStr != "" {
-			filters.AddFilter("difficulty", difficultyStr)
+			if err := filters.AddFilter("difficulty", difficultyStr); err != nil {
+				return err
+			}
 		}
 
 		if statusStr != "" {
-			filters.AddFilter("status", statusStr)
+			if err := filters.AddFilter("status", statusStr); err != nil {
+				return err
+			}
 		}
 
 		if tagsStr != "" {
-			filters.AddFilter("tags", tagsStr)
+			if err := filters.AddFilter("tags", tagsStr); err != nil {
+				return err
+			}
+		}
+
+		if trackStr != "" {
+			if err := filters.AddFilter("track", trackStr); err != nil {
+				return err
+			}
 		}
 
 		if _, err := filters.GetFilter("slug"); err != nil {
@@ -47,6 +81,10 @@ var checkoutCmd = &cobra.Command{
 } else {
 				filters.Update(&newFilters)
 			}
+		}
+
+		if doSubmit {
+			doOpen = true
 		}
 
 		if len(args) == 0 && doOpen {
@@ -94,20 +132,19 @@ var checkoutCmd = &cobra.Command{
 				srcStr = path.Join(srcStr, fmt.Sprintf("%s.%s", filename, ext))
 			}
 
-			stat, err = os.Stat(srcStr)
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				return err
-			} else if err == nil {
-				log.Printf("file already exists: %s, not writing anything", srcStr)
-			} else {
-				log.Printf("writing to file %s", srcStr)
+			toFileIfNotExists(srcStr, questionStr)
 
-				output, err := os.Create(srcStr)
-				if err != nil {
-					return err
-				}
-				fmt.Fprintf(output, "%s", questionStr)
-				fmt.Fprintf(os.Stdout, "%s", srcStr)
+			srcDir := path.Dir(srcStr)
+			files, err := questionData.Files()
+			if err != nil {
+				return err
+			}
+
+			var paths []string
+			for name, content := range files {
+				filepath := path.Join(srcDir, name)
+				toFileIfNotExists(filepath, content)
+				paths = append(paths, filepath)
 			}
 
 			if doOpen {
@@ -117,13 +154,21 @@ var checkoutCmd = &cobra.Command{
 				}
 
 				editorCmd := exec.Command(editor, srcStr)
-
 				if err := editorCmd.Start(); err != nil {
 					return err
 				}
 
+				for _, path := range paths {
+					open.Start(path)
+				}
+
 				if err := editorCmd.Wait(); err != nil {
 					return err
+				}
+
+				if doSubmit {
+					rootCmd.SetArgs([]string{"submit", srcStr})
+					rootCmd.Execute()
 				}
 			}
 		}

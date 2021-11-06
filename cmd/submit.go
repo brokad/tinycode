@@ -1,42 +1,68 @@
 package cmd
 
 import (
-	"bufio"
 	"fmt"
 	"github.com/brokad/tinycode/provider"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"io"
 	"log"
+	"math"
 	"os"
-	"regexp"
 	"strings"
 )
 
 func printSubmitReportAndExit(report provider.SubmissionReport) {
-	summary, err := report.Summary()
-	if err != nil {
-		panic(err)
-	}
-
 	if report.HasSucceeded() {
 		log.Printf("%s: run succeeded", report.Identify())
+
+		var stats = report.Statistics()
+
+		var buf strings.Builder
+
 		header := color.New(color.Bold, color.FgGreen)
-		header.Fprintf(os.Stderr, "\n    Finished ")
-		fmt.Fprintf(
-			os.Stderr,
-			"%d done in %s (better than %f%%) and %s (better than %f%%)\n\n",
-			summary.Stats.TotalTestCases,
-			summary.Stats.Runtime,
-			summary.Stats.RuntimePercentile,
-			summary.Stats.Memory,
-			summary.Stats.MemoryPercentile,
-		)
+		header.Fprintf(&buf, "Finished")
+
+		if tc := stats.TotalTestCases; tc != 0 {
+			fmt.Fprintf(&buf, " %d testcase", tc)
+			if tc > 1 {
+				fmt.Fprintf(&buf, "s")
+			}
+		}
+
+		fmt.Fprintf(&buf, " done")
+
+		if rt := stats.Runtime; rt != "" {
+			fmt.Fprintf(&buf, " in %s", rt)
+		}
+
+		if rtp := stats.RuntimePercentile; !math.IsNaN(rtp) {
+			fmt.Fprintf(&buf, " (better than %f%%)", rtp)
+		}
+
+		if mem := stats.Memory; mem != "" {
+			fmt.Fprintf(&buf, " and using %s", mem)
+		}
+
+		if memp := stats.MemoryPercentile; !math.IsNaN(memp) {
+			fmt.Fprintf(&buf, " (better than %f%%)", memp)
+		}
+
+		if score := stats.Score; score != "" {
+			fmt.Fprintf(&buf, " and earned %s", score)
+		}
+
+		if maxs := stats.MaxScore; maxs != "" {
+			fmt.Fprintf(&buf, " (out of %s)", maxs)
+		}
+
+		fmt.Fprintf(os.Stderr, "\n    %s", buf.String())
+
 		os.Exit(0)
 	} else {
 		log.Printf("%s: run failed", report.Identify())
 
-		errorReport := *summary.Error
+		errorReport := *report.ErrorReport()
 
 		header := color.New(color.Bold, color.FgRed)
 		bold := color.New(color.Bold)
@@ -68,29 +94,6 @@ var submitCmd = &cobra.Command{
 	Use: "submit [-p problem-slug | -i problem-id] path",
 	Short: "submit a solution to be judged",
 	Args: cobra.MaximumNArgs(1),
-	PreRunE: func(cmd *cobra.Command, args []string) error {
-		if srcStr != "" {
-			srcFile, err := os.Open(srcStr)
-			if err != nil {
-				return err
-			}
-
-			scanner := bufio.NewScanner(srcFile)
-			for scanner.Scan() {
-				ln := scanner.Text()
-				re := regexp.MustCompile("([\\w-]+) metadata: ")
-				matches := re.FindStringSubmatch(ln)
-				if len(matches) != 0 {
-					backend = matches[1]
-					log.Printf("metadata found for %s", backend)
-					parsedFilters := provider.ParseFilters(ln)
-					filters.Update(parsedFilters)
-				}
-			}
-		}
-
-		return nil
-	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		challenge, err := client.GetChallenge(filters)
 		if err != nil {

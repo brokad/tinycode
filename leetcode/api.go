@@ -70,53 +70,60 @@ type CheckResponse struct {
 	State             State   `json:"state"`
 }
 
-func (res *CheckResponse) Summary() (*provider.SubmissionSummary, error) {
-	var stats provider.SubmissionStatistics
-	var errorReport *provider.ErrorReport
+func (res *CheckResponse) Statistics() provider.SubmissionStatistics {
+	var stats = provider.NewStatistics()
+	stats.TotalTestCases = res.TotalTestCases
+	stats.Runtime = res.StatusRuntime
+	stats.RuntimePercentile = res.RuntimePercentile
+	stats.Memory = res.StatusMemory
+	stats.MemoryPercentile = res.MemoryPercentile
+	return stats
+}
+
+func (res *CheckResponse) ErrorReport() *provider.ErrorReport {
 	if res.HasSucceeded() {
-		stats.TotalTestCases = res.TotalTestCases
-		stats.Runtime = res.StatusRuntime
-		stats.RuntimePercentile = res.RuntimePercentile
-		stats.Memory = res.StatusMemory
-		stats.MemoryPercentile = res.MemoryPercentile
+		return nil
 	} else {
-		var errorClass string
-		var errorMsg string
-		var ctxHeader string
-		var ctxMsg string
+		var err provider.ErrorReport
 		switch res.StatusCode {
 		case RuntimeError:
-			errorClass = "runtime error"
-			errorMsg = res.RuntimeError
-			ctxHeader = fmt.Sprintf("last test case: %s", strings.ReplaceAll(res.LastTestCase, "\n", ", "))
-			ctxMsg = fmt.Sprintf("expected output: %s\n\nruntime error: %s\n", res.ExpectedOutput, res.FullRuntimeError)
+			err = provider.NewErrorReport(
+				"runtime error",
+				res.RuntimeError,
+				fmt.Sprintf("last test case: %s", strings.ReplaceAll(res.LastTestCase, "\n", ", ")),
+				fmt.Sprintf("expected output: %s\n\nruntime error: %s\n", res.ExpectedOutput, res.FullRuntimeError),
+			)
 		case CompileError:
-			errorClass = "compile error"
-			errorMsg = res.CompileError
-			ctxMsg = fmt.Sprintf("%s\n", res.FullCompileError)
+			err = provider.NewErrorReport(
+				"compile error",
+				res.CompileError,
+				"",
+				fmt.Sprintf("%s\n", res.FullCompileError),
+			)
 		case WrongAnswer:
-			errorClass = "wrong answer"
-			errorMsg = "solution provided an invalid answer"
-			ctxHeader = fmt.Sprintf("on input: %s", res.InputFormatted)
-			ctxMsg = fmt.Sprintf("expected: %s\ngot: %s\n", res.ExpectedOutput, res.CodeOutput)
+			err = provider.NewErrorReport(
+				"wrong answer",
+				"solution provided an invalid answer",
+				fmt.Sprintf("on input: %s", res.InputFormatted),
+				fmt.Sprintf("expected: %s\ngot: %s\n", res.ExpectedOutput, res.CodeOutput),
+			)
 		case TimeLimitExceeded:
-			errorClass = "time limit exceeded"
-			errorMsg = "solution took too long"
-			ctxHeader = fmt.Sprintf("solution took: %dms", res.ElapsedTime)
-			ctxMsg = fmt.Sprintf("on input: %s\nexpected output: %s\n", strings.ReplaceAll(res.LastTestCase, "\n", ", "), res.ExpectedOutput)
+			err = provider.NewErrorReport(
+				"time limit exceeded",
+				"solution took too long",
+				fmt.Sprintf("solution took: %dms", res.ElapsedTime),
+				fmt.Sprintf("on input: %s\nexpected output: %s\n", strings.ReplaceAll(res.LastTestCase, "\n", ", "), res.ExpectedOutput),
+			)
 		default:
-			errorClass = "unhandled"
-			errorMsg = fmt.Sprintf("%s (%d)", res.StatusMsg, res.StatusCode)
-			ctxMsg = fmt.Sprintf("%v", res)
+			err = provider.NewErrorReport(
+				"unhandled",
+				fmt.Sprintf("%s (%d)", res.StatusMsg, res.StatusCode),
+				"raw output",
+				fmt.Sprintf("%v", res),
+			)
 		}
-		errorReport = &provider.ErrorReport{
-			ErrorClass: errorClass,
-			ErrorMsg:   errorMsg,
-			CtxHeader:  ctxHeader,
-			CtxMsg:     ctxMsg,
-		}
+		return &err
 	}
-	return &provider.SubmissionSummary{Stats: stats, Error: errorReport}, nil
 }
 
 func (res *CheckResponse) HasSucceeded() bool {
@@ -180,6 +187,10 @@ func ParseStatus(s string) (*StatusFilter, error) {
 		return nil, fmt.Errorf("unknown status: %s, must be one of: todo, attempted, solved", s)
 	}
 	return &status, nil
+}
+
+func (data *QuestionData) Files() (map[string]string, error) {
+	return map[string]string{}, nil
 }
 
 func (data *QuestionData) Identify() provider.Filters {

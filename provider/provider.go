@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"regexp"
 	"strings"
 )
@@ -68,7 +69,7 @@ func (filters *Filters) Render(buf io.StringWriter) error {
 func ParseFilters(s string) *Filters {
 	var output Filters
 	re := regexp.MustCompile("([\\w-]+)=([\\w-]+)")
-	for _, matches := range re.FindAllStringSubmatch(s, -1) {		// Does not error handling because validation is ensured by the regex
+	for _, matches := range re.FindAllStringSubmatch(s, -1) { // Does not error handling because validation is ensured by the regex
 		_ = output.AddFilter(matches[1], matches[2])
 	}
 	return &output
@@ -85,18 +86,15 @@ type Provider interface {
 type Challenge interface {
 	Snippet(string) (string, error)
 	Prompt() string
+	Files() (map[string]string, error)
 	Identify() Filters
 }
 
 type SubmissionReport interface {
 	HasSucceeded() bool
 	Identify() string
-	Summary() (*SubmissionSummary, error)
-}
-
-type SubmissionSummary struct {
-	Stats SubmissionStatistics
-	Error *ErrorReport
+	Statistics() SubmissionStatistics
+	ErrorReport() *ErrorReport
 }
 
 type SubmissionStatistics struct {
@@ -106,6 +104,19 @@ type SubmissionStatistics struct {
 	Memory            string
 	MemoryPercentile  float64
 	Score             string
+	MaxScore          string
+}
+
+func NewStatistics() SubmissionStatistics {
+	return SubmissionStatistics{
+		TotalTestCases: 0,
+		Runtime: "",
+		RuntimePercentile: math.NaN(),
+		Memory: "",
+		MemoryPercentile: math.NaN(),
+		Score: "",
+		MaxScore: "",
+	}
 }
 
 type ErrorReport struct {
@@ -113,6 +124,15 @@ type ErrorReport struct {
 	ErrorMsg   string
 	CtxHeader  string
 	CtxMsg     string
+}
+
+func NewErrorReport(cls string, msg string, header string, content string) ErrorReport {
+	return ErrorReport{
+		ErrorClass: cls,
+		ErrorMsg: msg,
+		CtxHeader: header,
+		CtxMsg: content,
+	}
 }
 
 type Lang struct {
@@ -290,6 +310,8 @@ func (lang *Lang) Ext() string {
 		return "go"
 	case C:
 		return "c"
+	case Ruby:
+		return "rb"
 	default:
 		panic(fmt.Sprintf("unknown lang: %s", lang.raw))
 	}

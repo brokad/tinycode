@@ -3,6 +3,7 @@ package hackerrank
 import (
 	"fmt"
 	"github.com/brokad/tinycode/provider"
+	"log"
 	"strings"
 )
 
@@ -16,17 +17,23 @@ type Track struct {
 }
 
 type ChallengeData struct {
-	Solved      bool     `json:"solved"`
-	Attempted   bool     `json:"attempted"`
-	ContestSlug string   `json:"contest_slug"`
-	Slug        string   `json:"slug"`
-	Name        string   `json:"name"`
-	Preview     string   `json:"preview"`
-	Category    string   `json:"category"`
-	Languages   []string `json:"languages"`
-	Track       Track    `json:"track"`
-	CTemplate   string   `json:"c_template"`
-	MaxScore    int64    `json:"max_score"`
+	Solved       bool     `json:"solved"`
+	Attempted    bool     `json:"attempted"`
+	ContestSlug  string   `json:"contest_slug"`
+	Slug         string   `json:"slug"`
+	Name         string   `json:"name"`
+	Preview      string   `json:"preview"`
+	Category     string   `json:"category"`
+	BodyHtml     string   `json:"body_html"`
+	Languages    []string `json:"languages"`
+	Track        Track    `json:"track"`
+	CTemplate    string   `json:"c_template"`
+	RubyTemplate string   `json:"ruby_template"`
+	MaxScore     int64    `json:"max_score"`
+}
+
+func (data *ChallengeData) promptHtmlFilename() string {
+	return fmt.Sprintf("%s.html", data.Slug)
 }
 
 func (data *ChallengeData) Snippet(lang string) (string, error) {
@@ -34,18 +41,22 @@ func (data *ChallengeData) Snippet(lang string) (string, error) {
 	switch lang {
 	case "c":
 		template = data.CTemplate
+	case "ruby":
+		template = data.RubyTemplate
 	default:
 		return "", fmt.Errorf("unsupported language: %s", lang)
-	}
-
-	if template == "" {
-		return "", fmt.Errorf("no snippet for language in server response: %s", lang)
 	}
 	return template, nil
 }
 
 func (data *ChallengeData) Prompt() string {
-	return ""
+	return fmt.Sprintf("For instructions open: %s\n\n", data.promptHtmlFilename())
+}
+
+func (data *ChallengeData) Files() (map[string]string, error) {
+	return map[string]string{
+		data.promptHtmlFilename(): data.BodyHtml,
+	}, nil
 }
 
 func (data *ChallengeData) Identify() provider.Filters {
@@ -125,9 +136,9 @@ func (state *SubmissionState) findFirstFailedTestcase() int {
 	return -1
 }
 
-func (state *SubmissionState) ErrorReport() (*provider.ErrorReport, error) {
+func (state *SubmissionState) ErrorReport() *provider.ErrorReport {
 	if state.HasSucceeded() {
-		return nil, nil
+		return nil
 	}
 
 	output := provider.ErrorReport{
@@ -135,7 +146,6 @@ func (state *SubmissionState) ErrorReport() (*provider.ErrorReport, error) {
 	}
 
 	if state.CompileStatus != 0 {
-
 		msgSplit := strings.Split(state.CompileMessage, ":")
 
 		if len(msgSplit) > 0 {
@@ -159,28 +169,32 @@ func (state *SubmissionState) ErrorReport() (*provider.ErrorReport, error) {
 		output.ErrorMsg = fmt.Sprintf("Test Case %d: %s", firstFailedIdx, state.TestcaseMessage[firstFailedIdx])
 
 		testcaseData, err := state.client.GetTestcaseData(state.ContestSlug, state.ChallengeId, state.Id, int64(firstFailedIdx))
-		if err != nil {
-			return nil, err
-		}
+		if err == nil {
+			if testcaseData.Stdin == "" {
+				testcaseData.Stdin = "[paywalled, use --purchase flag to unlock]"
+			}
 
-		if testcaseData.Stdin == "" {
-			testcaseData.Stdin = "[paywalled, use --purchase flag to unlock]"
-		}
+			if testcaseData.ExpectedOutput == "" {
+				testcaseData.ExpectedOutput = "[paywalled]"
+			}
 
-		if testcaseData.ExpectedOutput == "" {
-			testcaseData.ExpectedOutput = "[paywalled]"
-		}
+			output.CtxHeader = fmt.Sprintf("last test case: %s", testcaseData.Stdin)
 
-		output.CtxHeader = fmt.Sprintf("last test case: %s", testcaseData.Stdin)
-		output.CtxMsg = fmt.Sprintf("expected output: %s\n", testcaseData.ExpectedOutput)
+			output.CtxMsg = fmt.Sprintf("expected output: %s\n", testcaseData.ExpectedOutput)
+		} else {
+			log.Printf("could not retrieve testcase data: %s", err)
+		}
 	}
 
-	return &output, nil
+	return &output
 }
 
-func (state *SubmissionState) Summary() (*provider.SubmissionSummary, error) {
+func (state *SubmissionState) Statistics() provider.SubmissionStatistics {
+	var stats = provider.NewStatistics()
+
 	if !state.IsDone() {
-		return nil, fmt.Errorf("submission is processing: %d", state.Id)
+		log.Printf("submission is processing: %d, no statistics yet", state.Id)
+		return stats
 	}
 
 	var totalRuntime = 0.
@@ -189,27 +203,16 @@ func (state *SubmissionState) Summary() (*provider.SubmissionSummary, error) {
 		totalRuntime += time
 	}
 
-	runtime := fmt.Sprintf("%fms", totalRuntime*100)
-
-	score := state.DisplayScore
-
-	stats := provider.SubmissionStatistics{
-		TotalTestCases: uint64(len(state.IndividualTestcaseScore)),
-		Runtime:        runtime,
-		Score:          score,
+	if totalRuntime != 0 {
+		stats.Runtime = fmt.Sprintf("%fms", totalRuntime*100)
 	}
 
-	output := provider.SubmissionSummary{
-		Stats: stats,
+	stats.TotalTestCases = uint64(len(state.IndividualTestcaseScore))
+	stats.Score = fmt.Sprintf("%spts", state.DisplayScore)
+
+	if state.maxScore > 0 {
+		stats.MaxScore = fmt.Sprintf("%dpts", state.maxScore)
 	}
 
-	if !state.HasSucceeded() {
-		if e, err := state.ErrorReport(); err != nil {
-			return nil, err
-		} else {
-			output.Error = e
-		}
-	}
-
-	return &output, nil
+	return stats
 }

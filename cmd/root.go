@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/brokad/tinycode/hackerrank"
 	"github.com/brokad/tinycode/leetcode"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"regexp"
 	"strings"
 )
 
@@ -38,6 +40,36 @@ var doPurchase bool
 var debug bool
 
 var config provider.Config
+
+type Metadata struct {
+	Backend string
+	Filters *provider.Filters
+}
+
+func GetMetadata(path string) (*Metadata, error) {
+	srcFile, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	scanner := bufio.NewScanner(srcFile)
+	var parsedFilters provider.Filters
+	var parsedBackend string
+	for scanner.Scan() {
+		ln := scanner.Text()
+		re := regexp.MustCompile("([\\w-]+) metadata: ")
+		matches := re.FindStringSubmatch(ln)
+		if len(matches) != 0 {
+			parsedBackend = matches[1]
+			log.Printf("metadata found for %s", backend)
+			f := provider.ParseFilters(ln)
+			parsedFilters = *f
+		}
+	}
+	return &Metadata{
+		Backend: parsedBackend,
+		Filters: &parsedFilters,
+	}, nil
+}
 
 var client provider.Provider
 
@@ -78,6 +110,28 @@ var rootCmd = &cobra.Command{
 			log.SetOutput(devNull)
 		}
 
+		if len(args) != 0 {
+			srcStr = args[0]
+		}
+
+		// if a path is passed as argument, try to set filters and backend flag
+		// by looking up the metadata in it
+		if srcStr != "" {
+			if metadata, err := GetMetadata(srcStr); err == nil {
+				if backend == "" && metadata.Backend != "" {
+					backend = metadata.Backend
+				}
+				filters.Update(metadata.Filters)
+			}
+		}
+
+		// if backend is not specified (and was not overridden by metadata), default
+		// is "leetcode"
+		if backend == "" {
+			backend = "leetcode"
+		}
+
+		// read the configuration file and extract the backend config
 		if err := viper.ReadInConfig(); err != nil {
 			return err
 		}
@@ -91,6 +145,7 @@ var rootCmd = &cobra.Command{
 			printCookieReadmeAndExit(backend)
 		}
 
+		// instantiate the backend client
 		switch backend {
 		case "leetcode":
 			baseStr = "https://www.leetcode.com"
@@ -118,6 +173,7 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("unknown provider: %s", backend)
 		}
 
+		// check if we are signed in, in order to check the validity of our token
 		if isSignedIn, err := client.IsSignedIn(); err != nil || !isSignedIn {
 			if err != nil {
 				log.Printf("error trying to check if user is signed in: %s", err)
@@ -130,7 +186,9 @@ var rootCmd = &cobra.Command{
 			log.Printf("valid authentication token found")
 		}
 
-		if langStr == "" && len(args) == 1 {
+		// if --lang is not given but a path was passed in argument, attempt to
+		// recover a --lang value from the file path's extension (if it has an extension)
+		if langStr == "" && srcStr != "" {
 			spl := strings.Split(args[0], ".")
 			if len(spl) > 1 {
 				ext := spl[len(spl)-1]
@@ -142,28 +200,24 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		if langStr != "" {
-			if parsedLang, err := provider.ParseLang(langStr); err != nil {
-				return err
-			} else {
-				lang = *parsedLang
-			}
-
-			localLangStr, err := client.LocalizeLanguage(lang)
-			if err != nil {
-				return err
-			} else {
-				langStr = localLangStr
-			}
-
-			filters.AddFilter("lang", langStr)
-		} else {
+		if langStr == "" {
 			return fmt.Errorf("a --lang must be provided (e.g. rust)")
 		}
 
-		if len(args) != 0 {
-			srcStr = args[0]
+		if parsedLang, err := provider.ParseLang(langStr); err != nil {
+			return err
+		} else {
+			lang = *parsedLang
 		}
+
+		localLangStr, err := client.LocalizeLanguage(lang)
+		if err != nil {
+			return err
+		} else {
+			langStr = localLangStr
+		}
+
+		filters.AddFilter("lang", langStr)
 
 		if problemId != "" {
 			filters.AddFilter("id", problemId)
@@ -195,7 +249,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", configPathDefault, "the path to the configuration directory")
 	rootCmd.MarkFlagDirname("config")
-	rootCmd.PersistentFlags().StringVar(&backend, "backend", "leetcode", "which problem set provider to use (leetcode or hackerrank)")
+	rootCmd.PersistentFlags().StringVar(&backend, "backend", "", "which problem set provider to use (leetcode or hackerrank)")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debugging output")
 
 	checkoutCmd.Flags().StringVarP(&difficultyStr, "difficulty", "d", "", "limit search to a given difficulty (easy, medium, hard)")
@@ -204,8 +258,10 @@ func init() {
 	checkoutCmd.Flags().StringVarP(&problemSlug, "problem", "p", "", "slug of a problem (e.g. two-sum)")
 	checkoutCmd.Flags().StringVarP(&problemId, "id", "i", "", "id of a problem (e.g. 1)")
 	checkoutCmd.Flags().StringVarP(&langStr, "lang", "l", "", "target language of the submission (e.g. cpp)")
-	checkoutCmd.Flags().StringVarP(&contestSlug, "contest", "c",  "","contest to which the problem belong (hackerrank only)")
+	checkoutCmd.Flags().StringVarP(&contestSlug, "contest", "c", "", "contest to which the problem belong (hackerrank only)")
 	checkoutCmd.Flags().BoolVarP(&doOpen, "open", "o", false, "whether to open the file")
+	checkoutCmd.Flags().StringVar(&trackStr, "track", "", "limit search to a given track (hackerrank only)")
+	checkoutCmd.Flags().BoolVarP(&doSubmit, "submit", "s", false, "whether to submit after closing the challenge")
 	rootCmd.AddCommand(checkoutCmd)
 
 	submitCmd.Flags().StringVarP(&problemSlug, "problem", "p", "", "slug of a problem (e.g. two-sum)")

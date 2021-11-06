@@ -6,11 +6,25 @@ import (
 	"github.com/brokad/tinycode/provider"
 	"log"
 	"net/url"
+	"strings"
 	"time"
 )
 
+func encodeFilters(filters map[string][]string) string {
+	var params = url.Values{}
+	for name, filter := range filters {
+		for _, f := range filter {
+			if f == "" {
+				continue
+			}
+			params.Add(fmt.Sprintf("filters[%s][]", name), f)
+		}
+	}
+	return params.Encode()
+}
+
 type Client struct {
-	transport provider.TransportClient
+	transport  provider.TransportClient
 	DoPurchase bool // optional
 }
 
@@ -26,7 +40,7 @@ func NewClient(config provider.BackendConfig, base *url.URL) (*Client, error) {
 
 	transport := provider.NewTransportClient(cookieJar, *base, config.Csrf, config.CsrfHeader)
 
-	return &Client{transport, false }, nil
+	return &Client{transport, false}, nil
 }
 
 func (client *Client) GetChallengeData(contest string, challenge string) (*ChallengeData, error) {
@@ -50,7 +64,7 @@ func (client *Client) GetChallengeData(contest string, challenge string) (*Chall
 	return &output.Model, nil
 }
 
-func (client *Client) Do(method string, path string, req interface {}, output interface {}) error {
+func (client *Client) Do(method string, path string, req interface{}, output interface{}) error {
 	type SubmitResponse struct {
 		Model   json.RawMessage `json:"model"`
 		Message string          `json:"message"`
@@ -74,6 +88,25 @@ func (client *Client) Do(method string, path string, req interface {}, output in
 		if err := json.Unmarshal(resp.Model, output); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (client *Client) DoMany(method string, path string, req interface{}, output interface{}) error {
+	type SubmitResponseMany struct {
+		Models json.RawMessage `json:"models"`
+		Total  uint64          `json:"total"`
+	}
+
+	resp := SubmitResponseMany{}
+
+	if err := client.transport.Do(method, path, req, &resp); err != nil {
+		return err
+	}
+
+	if err := json.Unmarshal(resp.Models, output); err != nil {
+		return err
 	}
 
 	return nil
@@ -225,8 +258,75 @@ func (client *Client) GetChallenge(filters provider.Filters) (provider.Challenge
 	return client.GetChallengeData(contest, slug)
 }
 
+func (client *Client) ListChallenges(contest string, track string, offset uint64, limit uint64, filters map[string][]string) ([]ChallengeData, error) {
+	path := fmt.Sprintf("/rest/contests/%s", contest)
+	if track != "" {
+		path = fmt.Sprintf("%s/tracks/%s", path, track)
+	}
+
+	type Values struct {
+		Filters map[string][]string `url:"filters"`
+	}
+
+	path = fmt.Sprintf("%s/challenges?%s", path, encodeFilters(filters))
+	log.Printf("list path: %s", path)
+
+	var output []ChallengeData
+	if err := client.DoMany("GET", path, nil, &output); err != nil {
+		return nil, err
+	} else {
+		return output, nil
+	}
+}
+
 func (client *Client) FindNextChallenge(filters provider.Filters) (provider.Filters, error) {
-	panic("todo")
+	var params = map[string][]string{}
+
+	if difficulty, err := filters.GetFilter("difficulty"); err == nil {
+		params["difficulty"] = []string{difficulty}
+	}
+
+	if subdomains, err := filters.GetFilter("tags"); err == nil {
+		params["subdomains"] = []string{}
+		for _, subdomain := range strings.Split(subdomains, ",") {
+			params["subdomains"] = append(params["subdomains"], subdomain)
+		}
+	}
+
+	if skills, err := filters.GetFilter("skills"); err == nil {
+		params["skills"] = []string{}
+		for _, skill := range strings.Split(skills, ",") {
+			params["skill"] = append(params["skill"], skill)
+		}
+	}
+
+	var output provider.Filters
+
+	contest, err := filters.GetFilter("contest")
+	if err != nil {
+		return output, err
+	}
+
+	var track string
+	if trackFilter, err := filters.GetFilter("track"); err == nil {
+		track = trackFilter
+	}
+
+	if status, err := filters.GetFilter("status"); err == nil {
+		params["status"] = []string{status}
+	} else {
+		params["status"] = []string{"unsolved"}
+	}
+
+	if challenges, err := client.ListChallenges(contest, track, 0, 1, params); err != nil {
+		return output, err
+	} else {
+		if len(challenges) > 0 {
+			return challenges[0].Identify(), nil
+		} else {
+			return output, fmt.Errorf("could not find challenge")
+		}
+	}
 }
 
 func (client *Client) Submit(filters provider.Filters, code string) (provider.SubmissionReport, error) {
@@ -245,5 +345,17 @@ func (client *Client) Submit(filters provider.Filters, code string) (provider.Su
 		return nil, err
 	}
 
-	return client.DoSubmit(contest, slug, lang, code)
+	challenge, err := client.GetChallengeData(contest, slug)
+	if err != nil {
+		return nil, err
+	}
+
+	state, err := client.DoSubmit(contest, slug, lang, code)
+	if err != nil {
+		return nil, err
+	}
+
+	state.maxScore = challenge.MaxScore
+
+	return state, nil
 }
