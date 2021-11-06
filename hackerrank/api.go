@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/brokad/tinycode/provider"
 	"log"
+	"reflect"
 	"strings"
 )
 
@@ -17,19 +18,117 @@ type Track struct {
 }
 
 type ChallengeData struct {
-	Solved       bool     `json:"solved"`
-	Attempted    bool     `json:"attempted"`
-	ContestSlug  string   `json:"contest_slug"`
-	Slug         string   `json:"slug"`
-	Name         string   `json:"name"`
-	Preview      string   `json:"preview"`
-	Category     string   `json:"category"`
-	BodyHtml     string   `json:"body_html"`
-	Languages    []string `json:"languages"`
-	Track        Track    `json:"track"`
-	CTemplate    string   `json:"c_template"`
-	RubyTemplate string   `json:"ruby_template"`
-	MaxScore     int64    `json:"max_score"`
+	Solved      bool     `json:"solved"`
+	Attempted   bool     `json:"attempted"`
+	ContestSlug string   `json:"contest_slug"`
+	Slug        string   `json:"slug"`
+	Name        string   `json:"name"`
+	Preview     string   `json:"preview"`
+	Category    string   `json:"category"`
+	BodyHtml    string   `json:"body_html"`
+	Languages   []string `json:"languages"`
+	Track       Track    `json:"track"`
+	MaxScore    int64    `json:"max_score"`
+
+	CTemplate     string `json:"c_template"`
+	CTemplateHead string `json:"c_template_head"`
+	CTemplateTail string `json:"c_template_tail"`
+
+	CppTemplate     string `json:"cpp_template"`
+	CppTemplateHead string `json:"cpp_template_head"`
+	CppTemplateTail string `json:"cpp_template_tail"`
+
+	JavaTemplate     string `json:"java_template"`
+	JavaTemplateHead string `json:"java_template_head"`
+	JavaTemplateTail string `json:"java_template_tail"`
+
+	CsharpTemplate     string `json:"csharp_template"`
+	CsharpTemplateHead string `json:"csharp_template_head"`
+	CsharpTemplateTail string `json:"csharp_template_tail"`
+
+	PhpTemplate     string `json:"php_template"`
+	PhpTemplateHead string `json:"php_template_head"`
+	PhpTemplateTail string `json:"php_template_tail"`
+
+	RubyTemplate     string `json:"ruby_template"`
+	RubyTemplateHead string `json:"ruby_template_head"`
+	RubyTemplateTail string `json:"ruby_template_tail"`
+
+	PythonTemplate     string `json:"python_template"`
+	PythonTemplateHead string `json:"python_template_head"`
+	PythonTemplateTail string `json:"python_template_tail"`
+
+	PerlTemplate     string `json:"perl_template"`
+	PerlTemplateHead string `json:"perl_template_head"`
+	PerlTemplateTail string `json:"perl_template_tail"`
+
+	HaskellTemplate     string `json:"haskell_template"`
+	HaskellTemplateHead string `json:"haskell_template_head"`
+	HaskellTemplateTail string `json:"haskell_template_tail"`
+
+	ClojureTemplate     string `json:"clojure_template"`
+	ClojureTemplateHead string `json:"clojure_template_head"`
+	ClojureTemplateTail string `json:"clojure_template_tail"`
+
+	ScalaTemplate     string `json:"scala_template"`
+	ScalaTemplateHead string `json:"scala_template_head"`
+	ScalaTemplateTail string `json:"scala_template_tail"`
+
+	LuaTemplate     string `json:"lua_template"`
+	LuaTemplateHead string `json:"lua_template_head"`
+	LuaTemplateTail string `json:"lua_template_tail"`
+
+	ErlangTemplate     string `json:"erlang_template"`
+	ErlangTemplateHead string `json:"erlang_template_head"`
+	ErlangTemplateTail string `json:"erlang_template_tail"`
+
+	JavascriptTemplate     string `json:"javascript_template"`
+	JavascriptTemplateHead string `json:"javascript_template_head"`
+	JavascriptTemplateTail string `json:"javascript_template_tail"`
+
+	TypescriptTemplate     string `json:"typescript_template"`
+	TypescriptTemplateHead string `json:"typescript_template_head"`
+	TypescriptTemplateTail string `json:"typescript_template_tail"`
+
+	GoTemplate     string `json:"go_template"`
+	GoTemplateHead string `json:"go_template_head"`
+	GoTemplateTail string `json:"go_template_tail"`
+
+	Python3Template     string `json:"python3_template"`
+	Python3TemplateHead string `json:"python3_template_head"`
+	Python3TemplateTail string `json:"python3_template_tail"`
+
+	ObjectivecTemplate     string `json:"objectivec_template"`
+	ObjectivecTemplateHead string `json:"objectivec_template_head"`
+	ObjectivecTemplateTail string `json:"objectivec_template_tail"`
+
+	Java8Template     string `json:"java8_template"`
+	Java8TemplateHead string `json:"java8_template_head"`
+	Java8TemplateTail string `json:"java8_template_tail"`
+
+	SwiftTemplate     string `json:"swift_template"`
+	SwiftTemplateHead string `json:"swift_template_head"`
+	SwiftTemplateTail string `json:"swift_template_tail"`
+
+	Cpp14Template     string `json:"cpp14_template"`
+	Cpp14TemplateHead string `json:"cpp14_template_head"`
+	Cpp14TemplateTail string `json:"cpp14_template_tail"`
+
+	PypyTemplate     string `json:"pypy_template"`
+	PypyTemplateHead string `json:"pypy_template_head"`
+	PypyTemplateTail string `json:"pypy_template_tail"`
+
+	Pypy3Template     string `json:"pypy3_template"`
+	Pypy3TemplateHead string `json:"pypy3_template_head"`
+	Pypy3TemplateTail string `json:"pypy3_template_tail"`
+
+	KotlinTemplate     string `json:"kotlin_template"`
+	KotlinTemplateHead string `json:"kotlin_template_head"`
+	KotlinTemplateTail string `json:"kotlin_template_tail"`
+
+	Java15Template     string `json:"java15_template"`
+	Java15TemplateHead string `json:"java15_template_head"`
+	Java15TemplateTail string `json:"java15_template_tail"`
 }
 
 func (data *ChallengeData) promptHtmlFilename() string {
@@ -37,20 +136,44 @@ func (data *ChallengeData) promptHtmlFilename() string {
 }
 
 func (data *ChallengeData) Snippet(lang string) (string, error) {
+	var head string
 	var template string
-	switch lang {
-	case "c":
-		template = data.CTemplate
-	case "ruby":
-		template = data.RubyTemplate
-	default:
-		return "", fmt.Errorf("unsupported language: %s", lang)
+	var tail string
+
+	v := reflect.ValueOf(*data)
+	rootName := fmt.Sprintf("%s_template", lang)
+	headName := fmt.Sprintf("%s_head", rootName)
+	tailName := fmt.Sprintf("%s_tail", rootName)
+
+	for i := 0; i < v.NumField(); i++ {
+		name, ok := v.Type().Field(i).Tag.Lookup("json")
+		if !ok {
+			continue
+		}
+
+		value := v.Field(i)
+
+		switch name {
+		case rootName:
+			template = value.String()
+		case headName:
+			head = value.String()
+		case tailName:
+			tail = value.String()
+		}
 	}
-	return template, nil
+
+	output := fmt.Sprintf("%s%s%s", head, template, tail)
+
+	if output != "" {
+		return output, nil
+	} else {
+		return output, fmt.Errorf("no snippet for lang %s found in server response", lang)
+	}
 }
 
 func (data *ChallengeData) Prompt() string {
-	return fmt.Sprintf("For instructions open: %s\n\n", data.promptHtmlFilename())
+	return fmt.Sprintf("For instructions open: %s", data.promptHtmlFilename())
 }
 
 func (data *ChallengeData) Files() (map[string]string, error) {
@@ -171,7 +294,7 @@ func (state *SubmissionState) ErrorReport() *provider.ErrorReport {
 		testcaseData, err := state.client.GetTestcaseData(state.ContestSlug, state.ChallengeId, state.Id, int64(firstFailedIdx))
 		if err == nil {
 			if testcaseData.Stdin == "" {
-				testcaseData.Stdin = "[paywalled, use --purchase flag to unlock]"
+				testcaseData.Stdin = "[paywalled, use the --purchase flag to unlock]"
 			}
 
 			if testcaseData.ExpectedOutput == "" {

@@ -109,13 +109,13 @@ type SubmissionStatistics struct {
 
 func NewStatistics() SubmissionStatistics {
 	return SubmissionStatistics{
-		TotalTestCases: 0,
-		Runtime: "",
+		TotalTestCases:    0,
+		Runtime:           "",
 		RuntimePercentile: math.NaN(),
-		Memory: "",
-		MemoryPercentile: math.NaN(),
-		Score: "",
-		MaxScore: "",
+		Memory:            "",
+		MemoryPercentile:  math.NaN(),
+		Score:             "",
+		MaxScore:          "",
 	}
 }
 
@@ -129,9 +129,9 @@ type ErrorReport struct {
 func NewErrorReport(cls string, msg string, header string, content string) ErrorReport {
 	return ErrorReport{
 		ErrorClass: cls,
-		ErrorMsg: msg,
-		CtxHeader: header,
-		CtxMsg: content,
+		ErrorMsg:   msg,
+		CtxHeader:  header,
+		CtxMsg:     content,
 	}
 }
 
@@ -141,9 +141,18 @@ type Lang struct {
 
 const (
 	Cpp        string = "cpp"
+	Cpp14             = "cpp14"
 	Java              = "java"
+	Java8             = "java8"
+	Java15            = "java15"
 	Python            = "python"
 	Python3           = "python3"
+	Perl              = "perl"
+	Haskell           = "haskell"
+	Clojure           = "clojure"
+	ObjectiveC        = "objectivec"
+	Pypy              = "pypy"
+	Pypy3             = "pypy3"
 	C                 = "c"
 	Csharp            = "csharp"
 	JavaScript        = "javascript"
@@ -164,9 +173,19 @@ func ParseLang(s string) (*Lang, error) {
 	switch s {
 	case C,
 		Cpp,
+		Cpp14,
 		Python,
 		Python3,
 		Csharp,
+		Java,
+		Java8,
+		Java15,
+		Perl,
+		Haskell,
+		Clojure,
+		Pypy,
+		Pypy3,
+		ObjectiveC,
 		JavaScript,
 		Ruby,
 		Swift,
@@ -195,9 +214,9 @@ func (lang *Lang) Is(s string) bool {
 
 func (lang *Lang) Comment() (string, string, string, string) {
 	switch lang.raw {
-	case C, Cpp, Java, Csharp, JavaScript, Swift, Golang, Scala, Kotlin, Php, TypeScript:
+	case C, ObjectiveC, Cpp, Cpp14, Java, Java8, Java15, Csharp, JavaScript, Swift, Golang, Scala, Kotlin, Php, TypeScript:
 		return "/*", "*/", " * ", "// "
-	case Python, Python3:
+	case Python, Python3, Pypy, Pypy3:
 		return "\"\"\"", "\"\"\"", "   ", "# "
 	case Ruby:
 		return "=begin", "=end", "", "# "
@@ -207,10 +226,14 @@ func (lang *Lang) Comment() (string, string, string, string) {
 		return "#|", "|#", " ", "; "
 	case Erlang:
 		return "%", "", "", ""
-	case Elixir:
+	case Elixir, Perl:
 		return "#", "", "", ""
+	case Haskell:
+		return "--", "", "", ""
+	case Clojure:
+		return ";", "", "", ""
 	default:
-		panic(fmt.Sprintf("unknown lang: %s", lang.raw))
+		panic(fmt.Sprintf("don't know how lang treats comments: %s", lang.raw))
 	}
 }
 
@@ -218,8 +241,14 @@ func (lang *Lang) Pretty() string {
 	switch lang.raw {
 	case Cpp:
 		return "C++"
+	case Cpp14:
+		return "C++14"
 	case Java:
 		return "Java"
+	case Java8:
+		return "Java8"
+	case Java15:
+		return "Java15"
 	case Python:
 		return "Python"
 	case Python3:
@@ -250,10 +279,22 @@ func (lang *Lang) Pretty() string {
 		return "Racket"
 	case Erlang:
 		return "Erlang"
+	case Perl:
+		return "Perl"
+	case Haskell:
+		return "Haskell"
 	case Elixir:
 		return "Elixir"
+	case Clojure:
+		return "Clojure"
+	case Pypy:
+		return "Pypy"
+	case Pypy3:
+		return "Pypy3"
+	case ObjectiveC:
+		return "ObjectiveC"
 	default:
-		panic(fmt.Sprintf("unknown lang: %s", lang.raw))
+		panic(fmt.Sprintf("unknown lang variant: %s", lang.raw))
 	}
 }
 
@@ -272,6 +313,8 @@ func ParseExt(ext string) (*Lang, error) {
 		raw = Python3
 	case "cs":
 		raw = Csharp
+	case "java":
+		raw = Java
 	case "js":
 		raw = JavaScript
 	case "ts":
@@ -290,17 +333,25 @@ func ParseExt(ext string) (*Lang, error) {
 		raw = Erlang
 	case "ex", "exs":
 		raw = Elixir
+	case "pl":
+		raw = Perl
+	case "hs":
+		raw = Haskell
 	case "rkt":
 		raw = Racket
+	case "clj":
+		raw = Clojure
+	case "m":
+		raw = ObjectiveC
 	default:
-		return nil, fmt.Errorf("unrecognized file extension: %s", ext)
+		return nil, fmt.Errorf("don't know what language associates to extension: %s", ext)
 	}
 	return &Lang{raw}, nil
 }
 
 func (lang *Lang) Ext() string {
 	switch lang.raw {
-	case Cpp:
+	case Cpp, Cpp14:
 		return "cpp"
 	case Rust:
 		return "rs"
@@ -312,8 +363,20 @@ func (lang *Lang) Ext() string {
 		return "c"
 	case Ruby:
 		return "rb"
+	case Java, Java8, Java15:
+		return "java"
+	case Perl:
+		return "pl"
+	case Haskell:
+		return "hs"
+	case Clojure:
+		return "clj"
+	case Python, Python3, Pypy, Pypy3:
+		return "py"
+	case ObjectiveC:
+		return "m"
 	default:
-		panic(fmt.Sprintf("unknown lang: %s", lang.raw))
+		panic(fmt.Sprintf("don't know what extension to associate to: %s", lang.raw))
 	}
 }
 

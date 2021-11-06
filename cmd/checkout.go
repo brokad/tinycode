@@ -42,7 +42,7 @@ func toFileIfNotExists(path string, content string) error {
 }
 
 var checkoutCmd = &cobra.Command{
-	Use:     "checkout [-p problem-slug | -i problem-id] [-d difficulty] [-l language] [path]",
+	Use:     "checkout [-p PROBLEM | -i ID] [-d DIFFICULTY] [-t TAGS] [-l LANG] [-c CONTEXT] [--open] [--submit] PATH",
 	Short:   "checkout a problem locally",
 	Args:    cobra.MaximumNArgs(1),
 	Example: `  tinycode checkout -d easy -l rust ./`,

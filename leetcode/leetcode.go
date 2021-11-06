@@ -23,18 +23,7 @@ func NewClient(config provider.BackendConfig, base *url.URL) (*Client, error) {
 		return nil, err
 	}
 
-	var csrfToken string
-	for _, cookie := range cookieJar.Cookies(base) {
-		if cookie.Name == "csrftoken" {
-			csrfToken = cookie.Value
-		}
-	}
-
-	if csrfToken == "" {
-		return nil, fmt.Errorf("could not find csrftoken cookie: try logging in to leetcode again")
-	}
-
-	transport := provider.NewTransportClient(cookieJar, *base, csrfToken, config.CsrfHeader)
+	transport := provider.NewTransportClient(cookieJar, *base, config.Csrf, config.CsrfHeader)
 
 	return &Client{transport}, nil
 }

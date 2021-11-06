@@ -71,36 +71,16 @@ func GetMetadata(path string) (*Metadata, error) {
 	}, nil
 }
 
-var client provider.Provider
-
-func printCookieReadmeAndExit(provider string) {
-	var instructions string
-	switch provider {
-	case "leetcode":
-		instructions = fmt.Sprintf(`
-  (1) Head over to https://leetcode.com/accounts/login/ and login to leetcode
-      using Firefox or Chrome/Chromium`)
-	default:
-		log.Panicf("unknown provider: %s", provider)
-	}
-	fmt.Fprintf(os.Stderr, `
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Could not find a valid authentication token for %[1]s.
-
-tinycode needs a current API token in order to query %[1]s's API. Please follow 
-these instructions to obtain one:
-%[2]s
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-`, provider, instructions)
-	log.Fatalf("could not authenticate to %s", provider)
+func IsConfigCommand(cmd *cobra.Command) bool {
+	return strings.HasPrefix(cmd.Use, "login")
 }
+
+var client provider.Provider
 
 var rootCmd = &cobra.Command{
 	Use:   "tinycode",
-	Short: "Crunch competitive coding questions in your favorite IDE, not in the browser",
-	Example: `  tinycode checkout --difficulty easy --open problem.cpp
-  tinycode submit problem.cpp`,
+	Short: "Real hackers don't do competitive coding in the browser",
+	Example: `  tinycode checkout --difficulty easy --submit problem.cpp`,
 	Version: "0.1.0",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if debug {
@@ -108,6 +88,12 @@ var rootCmd = &cobra.Command{
 		} else {
 			devNull, _ := os.Create(os.DevNull)
 			log.SetOutput(devNull)
+		}
+
+		// if we're running a pure config command, there is no need to
+		// initialize all the things
+		if IsConfigCommand(cmd) {
+			return nil
 		}
 
 		if len(args) != 0 {
@@ -133,7 +119,7 @@ var rootCmd = &cobra.Command{
 
 		// read the configuration file and extract the backend config
 		if err := viper.ReadInConfig(); err != nil {
-			return err
+			return fmt.Errorf("no configuration file for %s found: try running: tinycode login %[1]s", backend)
 		}
 
 		if err := viper.Unmarshal(&config); err != nil {
@@ -142,7 +128,7 @@ var rootCmd = &cobra.Command{
 
 		backendConfig, in := config.Backend[backend]
 		if !in {
-			printCookieReadmeAndExit(backend)
+			return fmt.Errorf("no authentication token for %s found: try running: tinycode login %[1]s", backend)
 		}
 
 		// instantiate the backend client
@@ -176,12 +162,11 @@ var rootCmd = &cobra.Command{
 		// check if we are signed in, in order to check the validity of our token
 		if isSignedIn, err := client.IsSignedIn(); err != nil || !isSignedIn {
 			if err != nil {
-				log.Printf("error trying to check if user is signed in: %s", err)
-			}
-			if !isSignedIn {
+				log.Printf("error response while trying to check if signed in: %v", err)
+			} else {
 				log.Printf("user is not signed in")
 			}
-			printCookieReadmeAndExit(backend)
+			return fmt.Errorf("current login config for %s invalid: try running: tinycode login %[1]s", backend)
 		} else {
 			log.Printf("valid authentication token found")
 		}
@@ -249,7 +234,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", configPathDefault, "the path to the configuration directory")
 	rootCmd.MarkFlagDirname("config")
-	rootCmd.PersistentFlags().StringVar(&backend, "backend", "", "which problem set provider to use (leetcode or hackerrank)")
+	rootCmd.PersistentFlags().StringVar(&backend, "provider", "", "which problem provider to use (leetcode or hackerrank)")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debugging output")
 
 	checkoutCmd.Flags().StringVarP(&difficultyStr, "difficulty", "d", "", "limit search to a given difficulty (easy, medium, hard)")
@@ -270,11 +255,18 @@ func init() {
 	submitCmd.Flags().BoolVar(&doPurchase, "purchase", false, "whether to purchase the last failed testcase (hackerrank only)")
 	rootCmd.AddCommand(submitCmd)
 
+	loginCmd.Flags().StringVar(&csrf, "csrf", "", "X-CSRF-Token value to set")
+	loginCmd.Flags().StringVar(&auth, "auth", "", "Cookie session token to set")
+	rootCmd.AddCommand(loginCmd)
+
+	rootCmd.SilenceUsage = true
+	rootCmd.SilenceErrors = true
+
 	pwd, _ = os.Getwd()
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("toml")
-	viper.SetDefault("backend.leetcode.csrf-header", "x-csrftoken")
+	viper.SetDefault("backend.leetcode.csrf-header", "X-csrftoken")
 	viper.SetDefault("backend.hackerrank.csrf-header", "X-CSRF-Token")
 	viper.AddConfigPath(configPath)
 }

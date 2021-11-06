@@ -37,7 +37,7 @@ func unmarshalFromResponse(resp *http.Response, v interface{}) error {
 
 		resp.Body.Close()
 
-		return fmt.Errorf("invalid status code received from Client: %s\n%s", resp.Status, body)
+		return fmt.Errorf("error from server: %s, body: %s", resp.Status, body)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -72,7 +72,6 @@ func (client *TransportClient) Do(method string, path string, input interface{},
 	req.Header.Set("Referer", reqUrl.String())
 	req.Header.Set("Host", client.base.Host)
 	req.Header.Set(client.csrfTokenHeader, client.csrfToken)
-	//req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
 	resp, err := client.raw.Do(req)
 	if err != nil {
@@ -83,13 +82,10 @@ func (client *TransportClient) Do(method string, path string, input interface{},
 }
 
 func (client *TransportClient) DoQuery(operationName string, query string, variables interface{}, output interface{}) error {
-	graphQlRel, _ := url.Parse("/graphql")
-	graphQlBase := client.base.ResolveReference(graphQlRel)
-
 	type Query struct {
 		OperationName string      `json:"operationName"`
 		Query         string      `json:"query"`
-		Variables     interface{} `json:"variables"`
+		Variables     interface{} `json:"variables,omitempty"`
 	}
 
 	req := Query{
@@ -98,7 +94,7 @@ func (client *TransportClient) DoQuery(operationName string, query string, varia
 		variables,
 	}
 
-	err := client.Do("POST", graphQlBase.String(), req, output)
+	err := client.Do("POST", "/graphql", &req, output)
 
 	return err
 }

@@ -237,7 +237,19 @@ func (client *Client) GetTestcaseData(contest string, challengeId int64, submiss
 }
 
 func (client *Client) IsSignedIn() (bool, error) {
-	return true, nil
+	notifications := "/rest/contests/masters/notifications/summary"
+
+	type NotificationsResponse struct {
+		Status bool `json:"status"`
+	}
+
+	resp := &NotificationsResponse{}
+
+	if err := client.transport.Do("GET", notifications, nil, &resp); err != nil {
+		return false, err
+	}
+
+	return resp.Status, nil
 }
 
 func (client *Client) LocalizeLanguage(lang provider.Lang) (string, error) {
@@ -310,6 +322,25 @@ func (client *Client) FindNextChallenge(filters provider.Filters) (provider.Filt
 	var track string
 	if trackFilter, err := filters.GetFilter("track"); err == nil {
 		track = trackFilter
+	} else {
+		// Not specifying a track explicitly leads to what seems to be a very
+		// tough search for Hackerrank's backend. So this is disabled in order
+		// for us to be good citizens.
+		return output, fmt.Errorf(`a --track is required: one of 
+  algorithms
+  data-structures
+  mathematics
+  ai
+  c
+  cpp
+  java
+  python
+  ruby
+  sql
+  databases
+  shell
+  fp
+  regex`)
 	}
 
 	if status, err := filters.GetFilter("status"); err == nil {
