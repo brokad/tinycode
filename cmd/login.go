@@ -35,8 +35,6 @@ var loginCmd = &cobra.Command{
 				csrf = newCsrf
 				session = newSession
 			}
-		default:
-			return fmt.Errorf("unknown provider: %s", backend)
 		}
 
 		var mutate = false
@@ -55,6 +53,8 @@ var loginCmd = &cobra.Command{
 			if err := viper.WriteConfig(); err != nil {
 				return err
 			}
+		} else {
+			return fmt.Errorf("no --csrf or --session: not doing anything")
 		}
 
 		return nil

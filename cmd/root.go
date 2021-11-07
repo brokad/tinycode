@@ -79,7 +79,7 @@ var rootCmd = &cobra.Command{
 	Use:     "tinycode",
 	Short:   "Real hackers don't do competitive coding in the browser",
 	Example: `  tinycode checkout --difficulty easy --submit /tmp`,
-	Version: "0.1.0",
+	Version: "0.2.0",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if debug {
 			log.SetOutput(os.Stderr)
