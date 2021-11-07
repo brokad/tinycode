@@ -238,13 +238,19 @@ func stripHtml(s string) string {
 	return output
 }
 
-func (data *QuestionData) Snippet(lang string) (string, error) {
+func (data *QuestionData) Snippet(lang provider.Lang) (string, error) {
+	local, err := LocalizeLanguage(lang)
+	if err != nil {
+		return "", err
+	}
+
 	for _, snippet := range data.CodeSnippets {
-		if snippet.LangSlug == lang {
+		if snippet.LangSlug == local {
 			return snippet.Code, nil
 		}
 	}
-	return "", fmt.Errorf("no snippet for lang %s found in server response, please try again", lang)
+
+	return "", fmt.Errorf("no snippet for lang %s (leetcode %s) found in server response", lang, local)
 }
 
 func (data *QuestionData) Prompt() string {

@@ -13,19 +13,25 @@ type Client struct {
 	transport provider.TransportClient
 }
 
-func NewClient(config provider.BackendConfig, base *url.URL) (*Client, error) {
+func NewClient(base *url.URL) *Client {
+	transport := provider.NewTransportClient(*base)
+	return &Client{transport}
+}
+
+func (client *Client) Configure(config provider.BackendConfig) error {
 	cookies := map[string]string{
 		"csrftoken": config.Csrf,
-		"LEETCODE_SESSION": config.Auth,
-	}
-	cookieJar, err := provider.CookieJarFromMap(cookies, base)
-	if err != nil {
-		return nil, err
+		"LEETCODE_SESSION": config.Session,
 	}
 
-	transport := provider.NewTransportClient(cookieJar, *base, config.Csrf, config.CsrfHeader)
+	if err := client.transport.SetCookies(cookies); err != nil {
+		return err
+	}
 
-	return &Client{transport}, nil
+	client.transport.CsrfToken = config.Csrf
+	client.transport.CsrfTokenHeader = config.CsrfHeader
+
+	return nil
 }
 
 func (client *Client) IsSignedIn() (bool, error) {
@@ -166,7 +172,7 @@ func (client *Client) SubmitCode(questionId string, slug string, lang string, co
 	return &submitResp, nil
 }
 
-func (client *Client) Submit(filters provider.Filters, code string) (provider.SubmissionReport, error) {
+func (client *Client) Submit(filters provider.Filters, lang provider.Lang, code string) (provider.SubmissionReport, error) {
 	questionId, err := filters.GetFilter("id")
 	if err != nil {
 		return nil, err
@@ -177,12 +183,12 @@ func (client *Client) Submit(filters provider.Filters, code string) (provider.Su
 		return nil, err
 	}
 
-	langStr, err := filters.GetFilter("lang")
+	local, err := LocalizeLanguage(lang)
 	if err != nil {
 		return nil, err
 	}
 
-	submitResponse, err := client.SubmitCode(questionId, slug, langStr, code)
+	submitResponse, err := client.SubmitCode(questionId, slug, local, code)
 	if err != nil {
 		return nil, err
 	}
@@ -279,6 +285,6 @@ func (client *Client) GetChallenge(filters provider.Filters) (provider.Challenge
 	}
 }
 
-func (client *Client) LocalizeLanguage(lang provider.Lang) (string, error) {
+func LocalizeLanguage(lang provider.Lang) (string, error) {
 	return lang.String(), nil
 }

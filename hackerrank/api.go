@@ -135,13 +135,18 @@ func (data *ChallengeData) promptHtmlFilename() string {
 	return fmt.Sprintf("%s.html", data.Slug)
 }
 
-func (data *ChallengeData) Snippet(lang string) (string, error) {
+func (data *ChallengeData) Snippet(lang provider.Lang) (string, error) {
 	var head string
 	var template string
 	var tail string
 
+	local, err := LocalizeLanguage(lang)
+	if err != nil {
+		return "", err
+	}
+
 	v := reflect.ValueOf(*data)
-	rootName := fmt.Sprintf("%s_template", lang)
+	rootName := fmt.Sprintf("%s_template", local)
 	headName := fmt.Sprintf("%s_head", rootName)
 	tailName := fmt.Sprintf("%s_tail", rootName)
 
@@ -168,7 +173,7 @@ func (data *ChallengeData) Snippet(lang string) (string, error) {
 	if output != "" {
 		return output, nil
 	} else {
-		return output, fmt.Errorf("no snippet for lang %s found in server response", lang)
+		return output, fmt.Errorf("no snippet for lang %s (hackerrank %s) found in server response", lang, local)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 )
@@ -12,17 +13,39 @@ import (
 type TransportClient struct {
 	raw             http.Client
 	base            url.URL
-	csrfToken       string
-	csrfTokenHeader string
+	CsrfToken       string
+	CsrfTokenHeader string
 }
 
-func NewTransportClient(jar http.CookieJar, base url.URL, csrfToken string, csrfTokenHeader string) TransportClient {
-	raw := http.Client{Transport: nil, CheckRedirect: nil, Jar: jar}
+func NewTransportClient(base url.URL) TransportClient {
+	raw := http.Client{Transport: nil, CheckRedirect: nil, Jar: nil}
 	return TransportClient{
-		raw,
-		base,
-		csrfToken,
-		csrfTokenHeader,
+		raw: raw,
+		base: base,
+		CsrfToken: "",
+		CsrfTokenHeader: "",
+	}
+}
+
+func (client *TransportClient) ResolveReference(path string) (*url.URL, error) {
+	if parsed, err := url.Parse(path); err != nil {
+		return nil, err
+	} else {
+		return client.base.ResolveReference(parsed), nil
+	}
+}
+
+func (client *TransportClient) SetCookieJar(jar http.CookieJar) {
+	client.raw.Jar = jar
+}
+
+func (client *TransportClient) SetCookies(cookies map[string]string) error {
+	jar, err := CookieJarFromMap(cookies, &client.base)
+	if err != nil {
+		return err
+	} else {
+		client.SetCookieJar(jar)
+		return nil
 	}
 }
 
@@ -48,13 +71,15 @@ func unmarshalFromResponse(resp *http.Response, v interface{}) error {
 	return json.Unmarshal(body, v)
 }
 
+func (client *TransportClient) RawDo(r *http.Request) (*http.Response, error) {
+	return client.raw.Do(r)
+}
+
 func (client *TransportClient) Do(method string, path string, input interface{}, output interface{}) error {
-	parsedPath, err := url.Parse(path)
+	reqUrl, err := client.ResolveReference(path)
 	if err != nil {
 		return err
 	}
-
-	reqUrl := client.base.ResolveReference(parsedPath)
 
 	marshalled, err := json.Marshal(input)
 	if err != nil {
@@ -70,9 +95,17 @@ func (client *TransportClient) Do(method string, path string, input interface{},
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Referer", reqUrl.String())
 	req.Header.Set("Host", client.base.Host)
-	req.Header.Set(client.csrfTokenHeader, client.csrfToken)
+	req.Header.Set("Origin", client.base.String())
 
-	resp, err := client.raw.Do(req)
+	log.Printf("Referer: %s, Host: %s, Origin: %s", reqUrl.String(), client.base.Host, client.base.String())
+
+	if client.CsrfToken != "" {
+		req.Header.Set(client.CsrfTokenHeader, client.CsrfToken)
+	} else {
+		return fmt.Errorf("client has not set a CSRF token")
+	}
+
+	resp, err := client.RawDo(req)
 	if err != nil {
 		return err
 	}

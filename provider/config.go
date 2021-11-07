@@ -7,5 +7,5 @@ type Config struct {
 type BackendConfig struct {
 	Csrf       string `mapstructure:"csrf"`
 	CsrfHeader string `mapstructure:"csrf-header"`
-	Auth       string `mapstructure:"auth"`
+	Session    string `mapstructure:"session"`
 }

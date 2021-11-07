@@ -2,18 +2,19 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/brokad/tinycode/hackerrank"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 var csrf string
-var auth string
+var session string
 
-var loginCmd = &cobra.Command {
-	Use: "login [--csrf CSRF] [--session TOKEN] PROVIDER",
-	Short: "configure authentication for problem set providers",
-	Example: `  tinycode login hackerrank --csrf="abcdabcd" --auth="abcdabcd"`,
-	Args: cobra.ExactArgs(1),
+var loginCmd = &cobra.Command{
+	Use:     "login [-c CSRF] [-s TOKEN] [-p hackerrank | -p leetcode]",
+	Short:   "configure authentication for problem set providers",
+	Example: `  tinycode login -p hackerrank`,
+	Args:    cobra.ExactArgs(0),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := viper.ReadInConfig(); err != nil {
 			if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -25,7 +26,18 @@ var loginCmd = &cobra.Command {
 			}
 		}
 
-		backend = args[0]
+		switch c := client.(type) {
+		case *hackerrank.Client:
+			newCsrf, newSession, err := c.GetLogIn()
+			if err != nil {
+				return err
+			} else {
+				csrf = newCsrf
+				session = newSession
+			}
+		default:
+			return fmt.Errorf("unknown provider: %s", backend)
+		}
 
 		var mutate = false
 
@@ -34,8 +46,8 @@ var loginCmd = &cobra.Command {
 			mutate = true
 		}
 
-		if auth != "" {
-			viper.Set(fmt.Sprintf("backend.%s.auth", backend), auth)
+		if session != "" {
+			viper.Set(fmt.Sprintf("backend.%s.session", backend), session)
 			mutate = true
 		}
 

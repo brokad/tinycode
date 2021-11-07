@@ -1,10 +1,13 @@
 package hackerrank
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/brokad/tinycode/provider"
+	"golang.org/x/crypto/ssh/terminal"
 	"log"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -28,19 +31,147 @@ type Client struct {
 	DoPurchase bool // optional
 }
 
-func NewClient(config provider.BackendConfig, base *url.URL) (*Client, error) {
+func NewClient(base *url.URL) *Client {
+	transport := provider.NewTransportClient(*base)
+	return &Client{transport, false}
+}
+
+func (client *Client) Configure(config provider.BackendConfig) error {
 	cookies := map[string]string{
 		"csrftoken":      config.Csrf,
-		"_hrank_session": config.Auth,
+		"_hrank_session": config.Session,
 	}
-	cookieJar, err := provider.CookieJarFromMap(cookies, base)
+
+	if err := client.transport.SetCookies(cookies); err != nil {
+		return err
+	}
+
+	client.transport.CsrfToken = config.Csrf
+	client.transport.CsrfTokenHeader = config.CsrfHeader
+
+	return nil
+}
+
+func (client *Client) GetLogIn() (string, string, error) {
+	var csrf string
+	var session string
+
+	prefetchData, err := client.transport.ResolveReference("/prefetch_data")
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 
-	transport := provider.NewTransportClient(cookieJar, *base, config.Csrf, config.CsrfHeader)
+	req, err := http.NewRequest("GET", prefetchData.String(), nil)
+	if err != nil {
+		return "", "", err
+	}
 
-	return &Client{transport, false}, nil
+	type PrefetchResponse struct {
+		CsrfToken string `json:"_csrf_token"`
+	}
+
+	resp, err := client.transport.RawDo(req)
+
+	var sessionCookie *http.Cookie
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == "_hrank_session" {
+			session = cookie.Value
+			sessionCookie = cookie
+		}
+	}
+
+	respBody := PrefetchResponse{}
+
+	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
+		return "", "", err
+	}
+
+	csrf = respBody.CsrfToken
+
+	if sessionCookie == nil {
+		return "", "", fmt.Errorf("server response header did not set a session cookie")
+	}
+
+	type LoginRequest struct {
+		Fallback   bool   `json:"fallback"`
+		Login      string `json:"login"`
+		Password   string `json:"password"`
+		RememberMe bool   `json:"remember_me"`
+	}
+
+	type LoginResponse struct {
+		Status      bool     `json:"status"`
+		Messages    []string `json:"messages"`
+		Errors      []string `json:"errors"`
+		ContestSlug string   `json:"contest_slug"`
+		CsrfToken   string   `json:"csrf_token"`
+	}
+
+	var login string
+	fmt.Print("hackerrank login: ")
+	if _, err = fmt.Scanln(&login); err != nil {
+		panic(err)
+	}
+
+	fmt.Print("hackerrank password: ")
+	password, err := terminal.ReadPassword(0)
+	if err != nil {
+		panic(err)
+	} else {
+		fmt.Println()
+	}
+
+	loginReqUrl, err := client.transport.ResolveReference("/rest/auth/login")
+	if err != nil {
+		return "", "", err
+	}
+
+	loginReqBody := LoginRequest{
+		Fallback:   false,
+		Login:      login,
+		Password:   string(password),
+		RememberMe: false,
+	}
+
+	reqBuf, _ := json.Marshal(loginReqBody)
+
+	req, _ = http.NewRequest("POST", loginReqUrl.String(), bytes.NewReader(reqBuf))
+
+	req.AddCookie(sessionCookie)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	baseUrl, _ := client.transport.ResolveReference("/")
+	req.Header.Set("Host", baseUrl.Host)
+	req.Header.Set("Origin", baseUrl.String())
+
+	feLogin, _ := client.transport.ResolveReference("/auth/login")
+	req.Header.Set("Referer", feLogin.String())
+
+	if csrf != "" {
+		req.Header.Set("X-CSRF-Token", csrf)
+	}
+
+	log.Printf("Referer: %s, Host: %s, Origin: %s", feLogin.String(), baseUrl.Host, baseUrl.String())
+
+	resp, err = client.transport.RawDo(req)
+	if err != nil {
+		return "", "", err
+	}
+
+	loginRespBody := LoginResponse{}
+	if err := json.NewDecoder(resp.Body).Decode(&loginRespBody); err != nil {
+		return "", "", fmt.Errorf("could not decode server response: %s", err)
+	}
+
+	if loginRespBody.Status {
+		csrf = loginRespBody.CsrfToken
+		log.Printf("hackerrank: %s", strings.Join(loginRespBody.Messages, ": "))
+	} else {
+		return "", "", fmt.Errorf("error: %s", strings.Join(loginRespBody.Errors, ": "))
+	}
+
+	return csrf, session, nil
 }
 
 func (client *Client) GetChallengeData(contest string, challenge string) (*ChallengeData, error) {
@@ -252,7 +383,7 @@ func (client *Client) IsSignedIn() (bool, error) {
 	return resp.Status, nil
 }
 
-func (client *Client) LocalizeLanguage(lang provider.Lang) (string, error) {
+func LocalizeLanguage(lang provider.Lang) (string, error) {
 	return lang.String(), nil
 }
 
@@ -324,7 +455,7 @@ func (client *Client) FindNextChallenge(filters provider.Filters) (provider.Filt
 		track = trackFilter
 	} else {
 		// Not specifying a track explicitly leads to what seems to be a very
-		// tough search for Hackerrank's backend. So this is disabled in order
+		// tough search for HackerRank's backend. So this is disabled in order
 		// for us to be good citizens.
 		return output, fmt.Errorf(`a --track is required: one of 
   algorithms
@@ -360,13 +491,13 @@ func (client *Client) FindNextChallenge(filters provider.Filters) (provider.Filt
 	}
 }
 
-func (client *Client) Submit(filters provider.Filters, code string) (provider.SubmissionReport, error) {
+func (client *Client) Submit(filters provider.Filters, lang provider.Lang, code string) (provider.SubmissionReport, error) {
 	slug, err := filters.GetFilter("slug")
 	if err != nil {
 		return nil, err
 	}
 
-	lang, err := filters.GetFilter("lang")
+	local, err := LocalizeLanguage(lang)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +512,7 @@ func (client *Client) Submit(filters provider.Filters, code string) (provider.Su
 		return nil, err
 	}
 
-	state, err := client.DoSubmit(contest, slug, lang, code)
+	state, err := client.DoSubmit(contest, slug, local, code)
 	if err != nil {
 		return nil, err
 	}

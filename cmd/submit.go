@@ -121,7 +121,16 @@ var submitCmd = &cobra.Command{
 			return err
 		}
 
-		submitReport, err := client.Submit(filters, *code)
+		var lang *provider.Lang
+		if langStr == "" {
+			return fmt.Errorf("a --lang must be provided (e.g. rust)")
+		} else {
+			if lang, err = provider.ParseLang(langStr); err != nil {
+				return err
+			}
+		}
+
+		submitReport, err := client.Submit(filters, *lang, *code)
 		if err != nil {
 			return err
 		}

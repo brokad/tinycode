@@ -14,11 +14,11 @@ import (
 	"strings"
 )
 
+// Flags and parameters
 var difficultyStr string
 var statusStr string
 var tagsStr string
 var trackStr string
-
 var doOpen bool
 var doSubmit bool
 
@@ -27,14 +27,16 @@ func toFileIfNotExists(path string, content string) error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	} else if err == nil {
-		log.Printf("file already exists: %s, not writing anything", path)
+		fmt.Fprintf(os.Stderr, "tinycode: file already exists: %s, not writing anything\n", path)
 	} else {
 		log.Printf("writing to file %s", path)
 		output, err := os.Create(path)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(output, "%s", content)
+		if _, err := fmt.Fprintf(output, "%s", content); err != nil {
+			return err
+		}
 		output.Close()
 	}
 	fmt.Fprintf(os.Stdout, "%s\n", path)
@@ -42,7 +44,7 @@ func toFileIfNotExists(path string, content string) error {
 }
 
 var checkoutCmd = &cobra.Command{
-	Use:     "checkout [-p PROBLEM | -i ID] [-d DIFFICULTY] [-t TAGS] [-l LANG] [-c CONTEXT] [--open] [--submit] PATH",
+	Use:     "checkout [--problem PROBLEM | --id ID] [-d DIFFICULTY] [-t TAGS] [-l LANG] [--track TRACK] [--contest CONTEST] [--open | --submit] PATH",
 	Short:   "checkout a problem locally",
 	Args:    cobra.MaximumNArgs(1),
 	Example: `  tinycode checkout -d easy -l rust ./`,
@@ -99,8 +101,17 @@ var checkoutCmd = &cobra.Command{
 			return err
 		}
 
+		var lang *provider.Lang
+		if langStr == "" {
+			return fmt.Errorf("a --lang must be provided (e.g. rust)")
+		} else {
+			if lang, err = provider.ParseLang(langStr); err != nil {
+				return err
+			}
+		}
+
 		var buf strings.Builder
-		if err := provider.EncodeChallenge(backend, lang, filters, questionData, &buf); err != nil {
+		if err := provider.EncodeChallenge(backend, *lang, filters, questionData, &buf); err != nil {
 			return err
 		}
 		questionStr := buf.String()
@@ -108,7 +119,9 @@ var checkoutCmd = &cobra.Command{
 		questionIdentity := questionData.Identify()
 
 		if srcStr == "" {
-			fmt.Fprintf(os.Stdout, "%s", questionStr)
+			if _, err := fmt.Fprintf(os.Stdout, "%s", questionStr); err != nil {
+				return err
+			}
 		} else {
 			stat, err := os.Stat(srcStr)
 			if err == nil && stat.Mode().IsDir() {
@@ -168,7 +181,7 @@ var checkoutCmd = &cobra.Command{
 
 				if doSubmit {
 					rootCmd.SetArgs([]string{"submit", srcStr})
-					rootCmd.Execute()
+					return rootCmd.Execute()
 				}
 			}
 		}

@@ -17,29 +17,27 @@ import (
 	"strings"
 )
 
+// Flags and parameters
 var backend string
 var configPath string
-
-// Filters
 var langStr string
-var lang provider.Lang
-
 var problemId string
 var problemSlug string
 var contestSlug string
-
-var filters = provider.Filters{}
-
-var baseStr string
-var pwd string
-var baseUrl *url.URL
 var srcStr string
-
 var doPurchase bool
-
 var debug bool
 
+// State variables
+var filters = provider.Filters{}
 var config provider.Config
+
+const (
+	HackerRankUrl string = "https://www.hackerrank.com/"
+	HackerRank           = "hackerrank"
+	LeetCodeUrl          = "https://leetcode.com/"
+	LeetCode             = "leetcode"
+)
 
 type Metadata struct {
 	Backend string
@@ -78,9 +76,9 @@ func IsConfigCommand(cmd *cobra.Command) bool {
 var client provider.Provider
 
 var rootCmd = &cobra.Command{
-	Use:   "tinycode",
-	Short: "Real hackers don't do competitive coding in the browser",
-	Example: `  tinycode checkout --difficulty easy --submit problem.cpp`,
+	Use:     "tinycode",
+	Short:   "Real hackers don't do competitive coding in the browser",
+	Example: `  tinycode checkout --difficulty easy --submit /tmp`,
 	Version: "0.1.0",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if debug {
@@ -88,12 +86,6 @@ var rootCmd = &cobra.Command{
 		} else {
 			devNull, _ := os.Create(os.DevNull)
 			log.SetOutput(devNull)
-		}
-
-		// if we're running a pure config command, there is no need to
-		// initialize all the things
-		if IsConfigCommand(cmd) {
-			return nil
 		}
 
 		if len(args) != 0 {
@@ -112,63 +104,57 @@ var rootCmd = &cobra.Command{
 		}
 
 		// if backend is not specified (and was not overridden by metadata), default
-		// is "leetcode"
+		// is "hackerrank"
 		if backend == "" {
-			backend = "leetcode"
+			backend = HackerRank
 		}
 
-		// read the configuration file and extract the backend config
+		// instantiate the backend client
+		switch backend {
+		case LeetCode:
+			base, _ := url.Parse(LeetCodeUrl)
+			client = leetcode.NewClient(base)
+		case HackerRank:
+			base, _ := url.Parse(HackerRankUrl)
+			hrClient := hackerrank.NewClient(base)
+			hrClient.DoPurchase = doPurchase
+			client = hrClient
+		default:
+			return fmt.Errorf("unknown provider: %s (must be hackerrank or leetcode)", backend)
+		}
+
+		if IsConfigCommand(cmd) { // cmd is `login` or other configuration subcommand
+			return nil
+		}
+
+		// read the configuration file and extract+apply the backend config
 		if err := viper.ReadInConfig(); err != nil {
-			return fmt.Errorf("no configuration file for %s found: try running: tinycode login %[1]s", backend)
+			return fmt.Errorf("no configuration found: try running: tinycode login -p %s", backend)
 		}
 
 		if err := viper.Unmarshal(&config); err != nil {
 			return err
 		}
 
-		backendConfig, in := config.Backend[backend]
+		config, in := config.Backend[backend]
 		if !in {
-			return fmt.Errorf("no authentication token for %s found: try running: tinycode login %[1]s", backend)
+			return fmt.Errorf("no authentication token for %s found: try running: tinycode login -p %[1]s", backend)
 		}
 
-		// instantiate the backend client
-		switch backend {
-		case "leetcode":
-			baseStr = "https://leetcode.com"
-			base, err := url.Parse(baseStr)
-			if err != nil {
-				return err
-			}
-			client, err = leetcode.NewClient(backendConfig, base)
-			if err != nil {
-				return err
-			}
-		case "hackerrank":
-			baseStr = "https://www.hackerrank.com"
-			base, err := url.Parse(baseStr)
-			if err != nil {
-				return err
-			}
-			hrClient, err := hackerrank.NewClient(backendConfig, base)
-			if err != nil {
-				return err
-			}
-			hrClient.DoPurchase = doPurchase
-			client = hrClient
-		default:
-			return fmt.Errorf("unknown provider: %s", backend)
+		if err := client.Configure(config); err != nil {
+			return err
 		}
 
 		// check if we are signed in, in order to check the validity of our token
 		if isSignedIn, err := client.IsSignedIn(); err != nil || !isSignedIn {
 			if err != nil {
-				log.Printf("error response while trying to check if signed in: %v", err)
+				log.Printf("error trying to check if signed in: %v", err)
 			} else {
-				log.Printf("user is not signed in")
+				log.Printf("not signed in")
 			}
-			return fmt.Errorf("current login config for %s invalid: try running: tinycode login %[1]s", backend)
+			return fmt.Errorf("current login config for %s invalid: try running: tinycode login -p %[1]s", backend)
 		} else {
-			log.Printf("valid authentication token found")
+			log.Printf("valid authentication token found!")
 		}
 
 		// if --lang is not given but a path was passed in argument, attempt to
@@ -178,46 +164,32 @@ var rootCmd = &cobra.Command{
 			if len(spl) > 1 {
 				ext := spl[len(spl)-1]
 				parsedLang, err := provider.ParseExt(ext)
-				langStr = parsedLang.String()
-				if err != nil {
-					return err
+				if err == nil { // a match
+					langStr = parsedLang.String()
 				}
 			}
 		}
 
-		if langStr == "" {
-			return fmt.Errorf("a --lang must be provided (e.g. rust)")
-		}
-
-		if parsedLang, err := provider.ParseLang(langStr); err != nil {
-			return err
-		} else {
-			lang = *parsedLang
-		}
-
-		localLangStr, err := client.LocalizeLanguage(lang)
-		if err != nil {
-			return err
-		} else {
-			langStr = localLangStr
-		}
-
-		filters.AddFilter("lang", langStr)
-
 		if problemId != "" {
-			filters.AddFilter("id", problemId)
+			if err := filters.AddFilter("id", problemId); err != nil {
+				return err
+			}
 		}
 
 		if problemSlug != "" {
-			filters.AddFilter("slug", problemSlug)
+			if err := filters.AddFilter("slug", problemSlug); err != nil {
+				return err
+			}
 		}
 
-		if contestSlug == "" && backend == "hackerrank" {
+		if contestSlug == "" && backend == HackerRank {
 			contestSlug = "master"
 		}
 
 		if contestSlug != "" {
-			filters.AddFilter("contest", contestSlug)
+			if err := filters.AddFilter("contest", contestSlug); err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -234,35 +206,33 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", configPathDefault, "the path to the configuration directory")
 	rootCmd.MarkFlagDirname("config")
-	rootCmd.PersistentFlags().StringVar(&backend, "provider", "", "which problem provider to use (leetcode or hackerrank)")
+	rootCmd.PersistentFlags().StringVarP(&backend, "provider", "p", "", "which problem provider to use (leetcode or hackerrank)")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debugging output")
 
 	checkoutCmd.Flags().StringVarP(&difficultyStr, "difficulty", "d", "", "limit search to a given difficulty (easy, medium, hard)")
 	checkoutCmd.Flags().StringVar(&statusStr, "status", "", "limit search to a given status (todo, attempted, solved)")
-	checkoutCmd.Flags().StringVarP(&tagsStr, "tags", "t", "", "limit search to a given list of (comma-separated) tags")
-	checkoutCmd.Flags().StringVarP(&problemSlug, "problem", "p", "", "slug of a problem (e.g. two-sum)")
-	checkoutCmd.Flags().StringVarP(&problemId, "id", "i", "", "id of a problem (e.g. 1)")
+	checkoutCmd.Flags().StringVarP(&tagsStr, "tags", "t", "", "limit search to a given list of (comma-separated) tags (leetcode only)")
+	checkoutCmd.Flags().StringVar(&problemSlug, "problem", "", "slug of a problem (e.g. two-sum)")
+	checkoutCmd.Flags().StringVar(&problemId, "id", "", "id of a problem (e.g. 1)")
 	checkoutCmd.Flags().StringVarP(&langStr, "lang", "l", "", "target language of the submission (e.g. cpp)")
-	checkoutCmd.Flags().StringVarP(&contestSlug, "contest", "c", "", "contest to which the problem belong (hackerrank only)")
+	checkoutCmd.Flags().StringVar(&contestSlug, "contest", "", "contest to which the problem belong (hackerrank only)")
 	checkoutCmd.Flags().BoolVarP(&doOpen, "open", "o", false, "whether to open the file")
 	checkoutCmd.Flags().StringVar(&trackStr, "track", "", "limit search to a given track (hackerrank only)")
-	checkoutCmd.Flags().BoolVarP(&doSubmit, "submit", "s", false, "whether to submit after closing the challenge")
+	checkoutCmd.Flags().BoolVarP(&doSubmit, "submit", "s", false, "whether to open the file then submit after closing")
 	rootCmd.AddCommand(checkoutCmd)
 
-	submitCmd.Flags().StringVarP(&problemSlug, "problem", "p", "", "slug of a problem (e.g. two-sum)")
-	submitCmd.Flags().StringVarP(&problemId, "id", "i", "", "id of a problem (e.g. 1)")
+	submitCmd.Flags().StringVar(&problemSlug, "problem", "", "slug of a problem (e.g. two-sum)")
+	submitCmd.Flags().StringVar(&problemId, "id", "", "id of a problem (e.g. 1)")
 	submitCmd.Flags().StringVarP(&langStr, "lang", "l", "", "target language of the submission (e.g. cpp)")
 	submitCmd.Flags().BoolVar(&doPurchase, "purchase", false, "whether to purchase the last failed testcase (hackerrank only)")
 	rootCmd.AddCommand(submitCmd)
 
-	loginCmd.Flags().StringVar(&csrf, "csrf", "", "X-CSRF-Token value to set")
-	loginCmd.Flags().StringVar(&auth, "auth", "", "Cookie session token to set")
+	loginCmd.Flags().StringVarP(&csrf, "csrf", "c", "", "Manually set the X-CSRF-Token")
+	loginCmd.Flags().StringVarP(&session, "session", "s", "", "Manually set the session token (_hrank_session for hackerrank, LEETCODE_SESSION for leetcode)")
 	rootCmd.AddCommand(loginCmd)
 
 	rootCmd.SilenceUsage = true
 	rootCmd.SilenceErrors = true
-
-	pwd, _ = os.Getwd()
 
 	viper.SetConfigName("config")
 	viper.SetConfigType("toml")
@@ -273,7 +243,7 @@ func init() {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprint(os.Stderr, err)
+		fmt.Fprintf(os.Stderr, "tinycode: %s", err)
 		os.Exit(1)
 	}
 }

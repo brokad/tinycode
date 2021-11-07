@@ -76,15 +76,15 @@ func ParseFilters(s string) *Filters {
 }
 
 type Provider interface {
+	Configure(BackendConfig) error
 	IsSignedIn() (bool, error)
-	LocalizeLanguage(Lang) (string, error)
 	GetChallenge(Filters) (Challenge, error)
 	FindNextChallenge(Filters) (Filters, error)
-	Submit(Filters, string) (SubmissionReport, error)
+	Submit(Filters, Lang, string) (SubmissionReport, error)
 }
 
 type Challenge interface {
-	Snippet(string) (string, error)
+	Snippet(Lang) (string, error)
 	Prompt() string
 	Files() (map[string]string, error)
 	Identify() Filters
@@ -384,7 +384,9 @@ func EncodeChallenge(backend string, lang Lang, filters Filters, challenge Chall
 	var headerBuf strings.Builder
 	headerBuf.WriteString(backend)
 	headerBuf.WriteString(" metadata: ")
-	filters.Render(&headerBuf)
+	if err := filters.Render(&headerBuf); err != nil {
+		return err
+	}
 	headerBuf.WriteString("\n\n")
 	headerBuf.WriteString(challenge.Prompt())
 	header := headerBuf.String()
@@ -419,14 +421,9 @@ func EncodeChallenge(backend string, lang Lang, filters Filters, challenge Chall
 		single = "// "
 	}
 
-	langStr, err := filters.GetFilter("lang")
-	if err != nil {
-		return err
-	}
-
 	// Add the solution prompt, braced by submission area brackets
 	writer.WriteString(fmt.Sprintf("\n\n%s%s submit region begin\n", single, backend))
-	if snippet, err := challenge.Snippet(langStr); err != nil {
+	if snippet, err := challenge.Snippet(lang); err != nil {
 		return err
 	} else {
 		writer.WriteString(snippet)

@@ -36,6 +36,9 @@ func CookieJarFromReader(reader io.Reader, url *url.URL, filter []string) (http.
 	for _, cookie := range allCookies {
 		for _, name := range filter {
 			if cookie.Name == name {
+				if cookie.Value == "" {
+					return nil, fmt.Errorf("empty value for cookie: %s", name)
+				}
 				cookies = append(cookies, cookie)
 			}
 		}
@@ -54,6 +57,9 @@ func CookieJarFromMap(m map[string]string, url *url.URL) (http.CookieJar, error)
 
 	var cookies []*http.Cookie
 	for name, value := range m {
+		if value == "" {
+			return nil, fmt.Errorf("empty value for cookie: %s", name)
+		}
 		cookie := http.Cookie{Name: name, Value: value}
 		cookies = append(cookies, &cookie)
 	}
