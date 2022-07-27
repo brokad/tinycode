@@ -1,6 +1,6 @@
 <h1>tinycode</h1>
 
-<h3>Competitive programming from your IDE or text editor.</h3>
+<h3>Coding challenges in your favorite IDE or editor.</h3>
 
 - [Getting Started](#getting-started) 
   - [HackerRank](#hackerrank)
