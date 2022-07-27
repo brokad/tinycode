@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/brokad/tinycode/hackerrank"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"os"
 	"path/filepath"
+	"tinycode/hackerrank"
 )
 
 var csrf string

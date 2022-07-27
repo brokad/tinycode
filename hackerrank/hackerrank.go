@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/brokad/tinycode/provider"
 	"golang.org/x/crypto/ssh/terminal"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+	"tinycode/provider"
 )
 
 func encodeFilters(filters map[string][]string) string {

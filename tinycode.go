@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/brokad/tinycode/cmd"
 	"log"
+	"tinycode/cmd"
 )
 
 func main() {

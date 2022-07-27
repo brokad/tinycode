@@ -2,11 +2,11 @@ package leetcode
 
 import (
 	"fmt"
-	"github.com/brokad/tinycode/provider"
 	"log"
 	"net/url"
 	"strings"
 	"time"
+	"tinycode/provider"
 )
 
 type Client struct {
@@ -20,7 +20,7 @@ func NewClient(base *url.URL) *Client {
 
 func (client *Client) Configure(config provider.BackendConfig) error {
 	cookies := map[string]string{
-		"csrftoken": config.Csrf,
+		"csrftoken":        config.Csrf,
 		"LEETCODE_SESSION": config.Session,
 	}
 
@@ -70,7 +70,7 @@ query randomQuestion($categorySlug: String, $filters: QuestionListFilterInput) {
   }
 }`
 
-	filters := Filters {
+	filters := Filters{
 		difficulty,
 		status,
 		tags,

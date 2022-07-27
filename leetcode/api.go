@@ -2,9 +2,9 @@ package leetcode
 
 import (
 	"fmt"
-	"github.com/brokad/tinycode/provider"
 	"regexp"
 	"strings"
+	"tinycode/provider"
 )
 
 type SubmitRequest struct {

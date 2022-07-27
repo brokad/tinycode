@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/brokad/tinycode/provider"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"io"
@@ -10,6 +9,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"tinycode/provider"
 )
 
 func printSubmitReportAndExit(report provider.SubmissionReport) {
@@ -91,9 +91,9 @@ func printSubmitReportAndExit(report provider.SubmissionReport) {
 }
 
 var submitCmd = &cobra.Command{
-	Use: "submit [-p problem-slug | -i problem-id] path",
+	Use:   "submit [-p problem-slug | -i problem-id] path",
 	Short: "submit a solution to be judged",
-	Args: cobra.MaximumNArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		challenge, err := client.GetChallenge(filters)
 		if err != nil {
