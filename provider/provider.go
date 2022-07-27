@@ -167,6 +167,7 @@ const (
 	Racket            = "racket"
 	Erlang            = "erlang"
 	Elixir            = "elixir"
+	Bash              = "bash"
 )
 
 func ParseLang(s string) (*Lang, error) {
@@ -197,7 +198,8 @@ func ParseLang(s string) (*Lang, error) {
 		TypeScript,
 		Racket,
 		Erlang,
-		Elixir:
+		Elixir,
+		Bash:
 		return &Lang{raw: s}, nil
 	default:
 		return nil, fmt.Errorf("unknown or unsupported lang: %s", s)
@@ -226,7 +228,7 @@ func (lang *Lang) Comment() (string, string, string, string) {
 		return "#|", "|#", " ", "; "
 	case Erlang:
 		return "%", "", "", ""
-	case Elixir, Perl:
+	case Elixir, Perl, Bash:
 		return "#", "", "", ""
 	case Haskell:
 		return "--", "", "", ""
@@ -293,6 +295,8 @@ func (lang *Lang) Pretty() string {
 		return "Pypy3"
 	case ObjectiveC:
 		return "ObjectiveC"
+	case Bash:
+		return "Bash"
 	default:
 		panic(fmt.Sprintf("unknown lang variant: %s", lang.raw))
 	}
@@ -343,6 +347,8 @@ func ParseExt(ext string) (*Lang, error) {
 		raw = Clojure
 	case "m":
 		raw = ObjectiveC
+	case "sh":
+		raw = Bash
 	default:
 		return nil, fmt.Errorf("don't know what language associates to extension: %s", ext)
 	}
@@ -375,6 +381,8 @@ func (lang *Lang) Ext() string {
 		return "py"
 	case ObjectiveC:
 		return "m"
+	case Bash:
+		return "sh"
 	default:
 		panic(fmt.Sprintf("don't know what extension to associate to: %s", lang.raw))
 	}

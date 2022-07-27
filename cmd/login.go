@@ -5,6 +5,8 @@ import (
 	"github.com/brokad/tinycode/hackerrank"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"os"
+	"path/filepath"
 )
 
 var csrf string
@@ -16,8 +18,16 @@ var loginCmd = &cobra.Command{
 	Example: `  tinycode login -p hackerrank`,
 	Args:    cobra.ExactArgs(0),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := os.MkdirAll(configPath, os.ModePerm); err != nil {
+			return err
+		}
+
 		if err := viper.ReadInConfig(); err != nil {
 			if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+				path := filepath.Dir(viper.ConfigFileUsed())
+				if err := os.MkdirAll(path, os.ModePerm); err != nil {
+					return err
+				}
 				if err := viper.SafeWriteConfig(); err != nil {
 					return err
 				}

@@ -80,7 +80,7 @@ var checkoutCmd = &cobra.Command{
 
 			if err != nil {
 				return err
-} else {
+			} else {
 				filters.Update(&newFilters)
 			}
 		}
@@ -90,7 +90,11 @@ var checkoutCmd = &cobra.Command{
 		}
 
 		if len(args) == 0 && doOpen {
-			return fmt.Errorf("a source path must be provided when using --open")
+			wd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			srcStr = wd
 		}
 
 		return nil
@@ -165,8 +169,8 @@ var checkoutCmd = &cobra.Command{
 				if editor == "" {
 					log.Fatal("no $EDITOR set, try `export EDITOR=emacs`")
 				}
-
-				editorCmd := exec.Command(editor, srcStr)
+				editorCmdArgs := append(strings.Split(editor, " "), srcStr)
+				editorCmd := exec.Command(editorCmdArgs[0], editorCmdArgs[1:]...)
 				if err := editorCmd.Start(); err != nil {
 					return err
 				}
