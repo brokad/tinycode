@@ -186,8 +186,8 @@ accepted values for the `--lang` option) can be found in
 If you find a bug and know how to fix it - feel free to go ahead and [open
 a PR][open-a-pr] for it! They will all be accepted. If you have a feature request, or 
 encounter a problem while using `tinycode`, please [open an issue][open-an-issue] and 
-let me know how to reproduce it. If you want to chat about something bigger 
-you want to do, the easiest is to find me on Discord ([94a84d2e#7864][find-me-on-discord])!
+let me know how to reproduce it. If you want to chat about something bigger you'd want
+to work on, the easiest is to connect with me on Discord [94a84d2e#7864][find-me-on-discord]!
 
 [open-a-pr]: https://github.com/brokad/tinycode/compare
 [open-an-issue]: https://github.com/brokad/tinycode/issues/new
