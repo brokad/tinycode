@@ -37,27 +37,29 @@ See [login](#login) for more on the `login` command.
 
 ### LeetCode
 
-To use LeetCode with `tinycode`, the process is a bit more involved as
-the LeetCode API does not support programmatic login. Instead, you
-have to login on LeetCode with a browser and extract the CSRF and
-session tokens from the developer console. 
+To use LeetCode, it is currently a bit more involved as
+the LeetCode API does not support programmatic login and `tinycode` 
+does not support extracting credentials from cookies (yet). 
 
-Here I'll explain how to do it with Firefox, but it's the same idea
+Login on LeetCode with a browser and extract the CSRF and
+session tokens from the developer console.
+
+Here's how to do it with Firefox, but it's the same idea
 with any browser you might be using.
 
 Head over to
 [https://leetcode.com/accounts/login/](https://leetcode.com/accounts/login/)
-and enter your login details. Open the developer console (Tools >
-Browser Tools > Web Developer Tools on macOS).
+and login. Open the developer console (Tools > Browser Tools > Web Developer Tools 
+on macOS).
 
-[picture here]
+<img src="./resources/firefox_developer_console.png" width="420"/>
 
 Go to "Storage" and open the cookies for `https://leetcode.com`. You
 should see two cookies, one for `csrftoken` and one for `LEETCODE_SESSION`.
 
-[another picture here]
+<img src="./resources/firefox_cookies.png" width="920"/>
 
-Copy the corresponding values into the command, when prompted:
+Run the command `tinycode login -p leetcode` and paste the corresponding values when prompted:
 
 ```shell
 $ tinycode login -p leetcode 
@@ -139,19 +141,45 @@ These options are **only** available when `--provider=hackerrank`:
   - `regex`
 
 Adding a path argument to `tinycode checkout` will have the problem prompt and associated code stub saved to 
-file at that path. If no path is specified, the present working directory is used and a file is created with 
-the problem slug as its name.
+file at that path. With HackerRank, this also creates an `.html` file to be opened separately in a browser. 
+
+If no path is specified the problem's code stub is output to stdout.
 
 ### submit
 
-To submit a solution, use the `tinycode submit` command.
+To submit a solution, you can use the `--submit` flag with `tinycode checkout` (see above) or the `tinycode submit`
+command. For example:
 
-## Supported languages
+```bash
+$ tinycode submit -p hackerrank --problem a-very-big-sum --contest master --track algorithms a-very-big-sum.cpp 
+```
 
-An exhaustive list of the languages supported by `tinycode` and the
-accepted values for the `--lang` option can be found in
-[provider/provider.go](./provider/provider.go). [TODO: write a compat
-table]
+If you are passing in a path to a file created by the `tinycode checkout`, none of the options below are required. 
+For example:
+
+```bash
+$ tinycode checkout --track algorithms --lang cpp problem.cpp
+$ emacs problem.cpp
+$ tinycode submit problem.cpp
+```
+
+The available options are:
+
+- `-p`/`--provider`: the problem provider to use, either `leetcode` or `hackerrank` (DEFAULT: `hackerrank`)
+- `--id`: the problem id to submit a solution for (e.g. `1`)
+- `--problem`: the slug of the problem to submit a solution for (e.g. `a-very-big-sum`)
+- `-l`/`--lang`: the programming language for which to submit a solution to this problem (should match the language 
+  used in the input file)
+
+These flags are **only** available when `--provider=hackerrank`:
+
+- `--purchase`: if specified, purchase the last failed testcase (using HackerRank credits)
+
+## Supported Languages
+
+An exhaustive list of the languages supported by `tinycode` (and the
+accepted values for the `--lang` option) can be found in
+[provider/provider.go](./provider/provider.go).
 
 ## Contributing
 
@@ -159,7 +187,7 @@ If you find a bug and know how to fix it - feel free to go ahead and [open
 a PR][open-a-pr] for it! They will all be accepted. If you have a feature request, or 
 encounter a problem while using `tinycode`, please [open an issue][open-an-issue] and 
 let me know how to reproduce it. If you want to chat about something bigger 
-you want to do, the easiest is to find me on Discord ([94a84d2e#7864][find-me-on-discord]).
+you want to do, the easiest is to find me on Discord ([94a84d2e#7864][find-me-on-discord])!
 
 [open-a-pr]: https://github.com/brokad/tinycode/compare
 [open-an-issue]: https://github.com/brokad/tinycode/issues/new
