@@ -2,10 +2,10 @@ package hackerrank
 
 import (
 	"fmt"
+	"github.com/brokad/tinycode/provider"
 	"log"
 	"reflect"
 	"strings"
-	"tinycode/provider"
 )
 
 type Track struct {

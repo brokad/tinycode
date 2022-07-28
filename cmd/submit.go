@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/brokad/tinycode/provider"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"io"
@@ -9,7 +10,6 @@ import (
 	"math"
 	"os"
 	"strings"
-	"tinycode/provider"
 )
 
 func printSubmitReportAndExit(report provider.SubmissionReport) {

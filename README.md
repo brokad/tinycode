@@ -30,7 +30,7 @@ can make sure you've been successfully logged in by checking out a
 sample unsolved problem:
 
 ```shell
-$ tinycode checkout --difficulty easy --track algorithms --lang cpp 
+$ tinycode checkout --track algorithms --lang cpp 
 ```
 
 See [login](#login) for more on the `login` command.
@@ -94,7 +94,7 @@ The login credentials are saved under `$HOME/.config/tinycode/config.toml`.
 To check a problem out, use the `tinycode checkout` command. For example:
 
 ```shell
-$ tinycode checkout -p leetcode --status todo -d easy -l rust
+$ tinycode checkout -p leetcode --lang rust --open
 ```
 
 This command runs a search of available problems from the specified provider. 

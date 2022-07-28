@@ -2,11 +2,11 @@ package leetcode
 
 import (
 	"fmt"
+	"github.com/brokad/tinycode/provider"
 	"log"
 	"net/url"
 	"strings"
 	"time"
-	"tinycode/provider"
 )
 
 type Client struct {

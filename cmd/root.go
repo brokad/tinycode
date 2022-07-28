@@ -3,6 +3,9 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"github.com/brokad/tinycode/hackerrank"
+	"github.com/brokad/tinycode/leetcode"
+	"github.com/brokad/tinycode/provider"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"log"
@@ -12,9 +15,6 @@ import (
 	"path"
 	"regexp"
 	"strings"
-	"tinycode/hackerrank"
-	"tinycode/leetcode"
-	"tinycode/provider"
 )
 
 // Flags and parameters

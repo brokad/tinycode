@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"github.com/brokad/tinycode/provider"
 	"github.com/iancoleman/strcase"
 	"github.com/skratchdot/open-golang/open"
 	"github.com/spf13/cobra"
@@ -11,7 +12,6 @@ import (
 	"os/exec"
 	"path"
 	"strings"
-	"tinycode/provider"
 )
 
 // Flags and parameters

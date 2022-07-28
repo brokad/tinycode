@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"tinycode/cmd"
+	"github.com/brokad/tinycode/cmd"
 )
 
 func main() {
