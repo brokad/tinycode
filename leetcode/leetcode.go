@@ -195,7 +195,7 @@ func (client *Client) Submit(filters provider.Filters, lang provider.Lang, code 
 
 	submissionId := submitResponse.SubmissionId
 
-	return client.WaitUntilCompleteOrTimeOut(submissionId, 5*time.Second)
+	return client.WaitUntilCompleteOrTimeOut(submissionId, 15*time.Second)
 }
 
 func (client *Client) WaitUntilCompleteOrTimeOut(submissionId int64, timeOut time.Duration) (*CheckResponse, error) {

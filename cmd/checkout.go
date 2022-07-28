@@ -171,6 +171,9 @@ var checkoutCmd = &cobra.Command{
 				}
 				editorCmdArgs := append(strings.Split(editor, " "), srcStr)
 				editorCmd := exec.Command(editorCmdArgs[0], editorCmdArgs[1:]...)
+				editorCmd.Stdout = os.Stdout
+				editorCmd.Stderr = os.Stderr
+				editorCmd.Stdin = os.Stdin
 				if err := editorCmd.Start(); err != nil {
 					return err
 				}

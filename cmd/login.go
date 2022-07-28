@@ -49,9 +49,23 @@ var loginCmd = &cobra.Command{
 
 		var mutate = false
 
+		if csrf == "" {
+			fmt.Print("csrf: ")
+			if _, err := fmt.Scanln(&csrf); err != nil {
+				return err
+			}
+		}
+
 		if csrf != "" {
 			viper.Set(fmt.Sprintf("backend.%s.csrf", backend), csrf)
 			mutate = true
+		}
+
+		if session == "" {
+			fmt.Print("session token: ")
+			if _, err := fmt.Scanln(&session); err != nil {
+				return err
+			}
 		}
 
 		if session != "" {
@@ -64,7 +78,7 @@ var loginCmd = &cobra.Command{
 				return err
 			}
 		} else {
-			return fmt.Errorf("no --csrf or --session: not doing anything")
+			return fmt.Errorf("no csrf or session token: not doing anything")
 		}
 
 		return nil

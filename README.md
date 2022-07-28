@@ -64,7 +64,7 @@ Run the command `tinycode login -p leetcode` and paste the corresponding values 
 ```shell
 $ tinycode login -p leetcode 
 csrf: {paste your 'csrftoken' cookie value}
-LEETCODE_SESSION: {paste your 'LEETCODE_SESSION' cookie value}
+session token: {paste your 'LEETCODE_SESSION' cookie value}
 ```
 
 You can test everything works as expected by running
