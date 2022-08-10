@@ -2,7 +2,8 @@
 
 <h3>Coding challenges in your favorite IDE or editor.</h3>
 
-- [Getting Started](#getting-started) 
+- [Installation](#installation)
+- [Getting Started](#getting-started)
   - [HackerRank](#hackerrank)
   - [LeetCode](#leetcode)
 - [Basic Usage](#basic-usage)
@@ -11,6 +12,14 @@
   - [submit](#submit)
 - [Supported Languages](#supported-languages)
 - [Contributing](#contributing)
+
+## Installation
+
+To install `tinycode` run:
+
+```bash
+$ go install github.com/brokad/tinycode@latest
+```
 
 ## Getting Started
 
